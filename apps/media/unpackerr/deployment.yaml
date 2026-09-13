@@ -20,26 +20,25 @@ spec:
       containers:
         - name: unpackerr
           image: ghcr.io/unpackerr/unpackerr:v0.16.1
+          # URLs + API keys come from the unpackerr-apikeys Secret
+          # (secrets/unpackerr.env via secretGenerator)
           env:
             - { name: TZ, value: America/Vancouver }
-            - { name: UN_CMD, value: "3" }
-            # api keys injected from secret via UN_ env vars below
+            - { name: UN_SONARR_0_PATHS_0, value: /srv/Media/Torrents/completed/tv }
+            - { name: UN_SONARR_0_PATHS_1, value: /srv/Media/Torrents/completed/anime }
+            - { name: UN_SONARR_0_PROTOCOLS, value: torrent }
+            - { name: UN_RADARR_0_PATHS_0, value: /srv/Media/Torrents/completed/movies }
+            - { name: UN_RADARR_0_PROTOCOLS, value: torrent }
+            # folder watcher: manually-added archives (category `manual`)
+            - { name: UN_FOLDER_0_PATH, value: /srv/Media/Torrents/completed/manual }
+            - { name: UN_FOLDER_0_DELETE_AFTER, value: 10m }
+            - { name: UN_FOLDER_0_MOVE_BACK, value: "false" }
           envFrom:
             - secretRef:
                 name: unpackerr-apikeys
           volumeMounts:
-            - { name: config, mountPath: /config }
+            # ONE mount for library + torrents (hardlink-compatible extraction)
             - { name: media, mountPath: /srv/Media }
-            - { name: unpackerr-conf, mountPath: /config/unpackerr.conf, subPath: unpackerr.conf }
-          readinessProbe:
-            exec:
-              command: ["/bin/sh", "-c", "pgrep -f unpackerr"]
-            periodSeconds: 15
       volumes:
-        - name: config
-          hostPath: { path: /srv/appdata/unpackerr, type: Directory }
         - name: media
           hostPath: { path: /srv/Media, type: Directory }
-        - name: unpackerr-conf
-          configMap:
-            name: unpackerr-config

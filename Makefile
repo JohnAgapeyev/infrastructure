@@ -1,5 +1,10 @@
 .PHONY: status logs restart apply-cluster apply-media apply-home apply-observability apply-all
 
+# NOTE: apps/* kustomizations reference repo-root secrets/ via
+# secretGenerator, which requires LoadRestrictionsNone. `kubectl apply -k`
+# has no load-restrictor flag, so we render with `kubectl kustomize` first.
+KUSTOMIZE = kubectl kustomize --load-restrictor=LoadRestrictionsNone
+
 status:
 	./scripts/status.sh
 
@@ -13,10 +18,10 @@ apply-cluster:
 	kubectl apply -k cluster/
 
 apply-media:
-	kubectl apply -k apps/media
+	$(KUSTOMIZE) apps/media | kubectl apply -f -
 
 apply-home:
-	kubectl apply -k apps/home
+	$(KUSTOMIZE) apps/home | kubectl apply -f -
 
 # Observability is a Helm umbrella chart + kustomize exporters/dashboards/rules
 apply-observability:

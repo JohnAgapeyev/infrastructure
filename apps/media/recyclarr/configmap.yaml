@@ -5,56 +5,21 @@ metadata:
   namespace: media
 data:
   recyclarr.yml: |
-    sonarr:
-      instance1:
-        base_url: http://sonarr.media.svc.cluster.local:8989
-        api_key: !secret sonarr_api_key
-
-        delete_old_custom_formats: true
-        replace_existing_custom_formats: true
-
-        quality_definition:
-          type: series
-
-        quality_profiles:
-          - name: HD->UHD Upgrade
-            upgrade:
-              allowed: true
-              until_quality: Bluray-2160p Remux
-              until_score: 10000
-            qualities:
-              - name: WEBRip-1080p
-                qualities: [WEBRip-1080p]
-              - name: WEBDL-1080p
-                qualities: [WEBDL-1080p]
-              - name: Bluray-1080p
-                qualities: [Bluray-1080p]
-              - name: HDTV-1080p
-                qualities: [HDTV-1080p]
-              - name: WEBRip-2160p
-                qualities: [WEBRip-2160p]
-              - name: WEBDL-2160p
-                qualities: [WEBDL-2160p]
-              - name: Bluray-2160p
-                qualities: [Bluray-2160p]
-              - name: Bluray-2160p Remux
-                qualities: [Bluray-2160p Remux]
-
-        custom_formats:
-          # TRaSH guides scoring; x265 NOT penalised (library is x265-heavy)
-          - trash_ids:
-              - e6258996055b9fbab7e9cb2f75419296  # Low Quality Releases (BR-DISK etc. bucket)
-              - 47435ece6b99a0b477caf360e79ba0bb  # x265 (HD) - deliberately NOT included
-            quality_profiles:
-              - name: HD->UHD Upgrade
+    # yaml-language-server: $schema=https://schemas.recyclarr.dev/v8/config-schema.json
+    # Recyclarr v8 config. Custom quality profiles (plan names) + TRaSH
+    # guide-backed custom format groups (guide-recommended scores).
+    # Guide-backed profile trash_ids intentionally unused so profiles keep the
+    # names the plan references (Seerr, docs).
+    #
+    # Owner deviations from TRaSH defaults (per PLAN.md section 8):
+    # - x265 NOT penalised (Golden Rule UHD group skipped entirely)
+    # - Sonarr anime: Anime Dual Audio +1000, Uncensored +500 (TRaSH: 0)
 
     radarr:
-      instance1:
+      radarr:
         base_url: http://radarr.media.svc.cluster.local:7878
         api_key: !secret radarr_api_key
-
         delete_old_custom_formats: true
-        replace_existing_custom_formats: true
 
         quality_definition:
           type: movie
@@ -65,29 +30,142 @@ data:
               allowed: true
               until_quality: Remux-2160p
               until_score: 10000
+            reset_unmatched_scores:
+              enabled: true
             qualities:
-              - name: WEBRip-1080p
-                qualities: [WEBRip-1080p]
-              - name: WEBDL-1080p
-                qualities: [WEBDL-1080p]
-              - name: Bluray-1080p
-                qualities: [Bluray-1080p]
-              - name: HDTV-1080p
-                qualities: [HDTV-1080p]
-              - name: WEBRip-2160p
-                qualities: [WEBRip-2160p]
-              - name: WEBDL-2160p
-                qualities: [WEBDL-2160p]
-              - name: Bluray-2160p
-                qualities: [Bluray-2160p]
               - name: Remux-2160p
-                qualities: [Remux-2160p]
+              - name: Bluray-2160p
+              - name: WEBDL-2160p
+              - name: WEBRip-2160p
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+
+        custom_format_groups:
+          add:
+            # [Release Groups] HQ: Remux tiers 01-03 + UHD Bluray tiers +
+            # HD Bluray tiers + WEB tiers (plan: positive Remux tiers)
+            - trash_id: b2f2af430f73f3ad1f9948f33e0f0cf8
+              select_all: true
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [Unwanted]: defaults (BR-DISK, LQ, LQ-RT, Upscaled, 3D, AV1,
+            # Extras, Generated Dynamic HDR, ...) + selected extras
+            - trash_id: a3ac6af01d78e4f21fcb75f601ac96df
+              select:
+                - ae9b7c9ebde1f3bd336a8cbd1ec4c5e5  # No-RlsGroup
+                - 7357cf5161efbf8c4d5d0c30b4815ee2  # Obfuscated
+                - 5c44f52a8714fdd79bb4d98e2673be1f  # Retags
+                - f537cf427b64c38c8e36298f657e4828  # Scene
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [Required] Repack/Proper
+            - trash_id: d688ff99733a9bc626c37eb61ea74704
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [HDR Formats] HDR (+500)
+            - trash_id: ef20e67b95a381fb3bc6d1f06ea24f46
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [HDR Formats] DV Boost (+1000)
+            - trash_id: 1616617ab3a14397a2b2321bcbda44d1
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [HDR Formats] HDR10+ Boost (+100)
+            - trash_id: b29413a7487478fe98228ce79e5689e4
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [HDR Formats] DV (w/o HDR fallback) (-10000)
+            - trash_id: 7fc2751eef7e6bdc70b74136e5e35c76
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+          # NOTE: [Optional] Golden Rule UHD (ff204bbcecdd487d1cefcefdbf0c278d)
+          # intentionally NOT added: its default member x265 (no HDR/DV)
+          # would penalise x265, which the owner explicitly does not want.
+
+    sonarr:
+      sonarr:
+        base_url: http://sonarr.media.svc.cluster.local:8989
+        api_key: !secret sonarr_api_key
+        delete_old_custom_formats: true
+
+        quality_profiles:
+          - name: HD->UHD Upgrade
+            upgrade:
+              allowed: true
+              until_quality: Bluray-2160p Remux
+              until_score: 10000
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Bluray-2160p Remux
+              - name: Bluray-2160p
+              - name: WEBDL-2160p
+              - name: WEBRip-2160p
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+          - name: Anime
+            upgrade:
+              allowed: true
+              until_quality: Bluray-1080p Remux
+              until_score: 10000
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Bluray-1080p Remux
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+              - name: HDTV-1080p
+
+        custom_format_groups:
+          add:
+            # [Release Groups] HQ: Remux tiers + HD Bluray tiers + WEB tiers
+            - trash_id: b4a4353e3b3e6789dbef07677ff23686
+              select_all: true
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [Unwanted]: defaults (AV1, Bad Dual, BR-DISK, Extras, LQ, LQ-RT,
+            # Upscaled) + selected extras
+            - trash_id: 59c3af66780d08332fdc64e68297098f
+              select:
+                - e1a997ddb54e3ecbfe06341ad323c458  # Obfuscated
+                - 82d40da2bc6923f41e14394075dd4b03  # No-RlsGroup
+                - 06d66ab109d4d2eddb2794d21526d140  # Retags
+                - 1b3994c551cbb92a2c781af061f4ab44  # Scene
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [Required] Repack/Proper (both profiles)
+            - trash_id: 22256473b656e195eabc2798e326fbb7
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+                - name: Anime
+            # [Streaming Services] HD/UHD boost
+            - trash_id: 85fae4a2294965b75710ef2989c850eb
+              assign_scores_to:
+                - name: HD->UHD Upgrade
+            # [Release Groups] Anime: BD tiers 01-08, Web tiers 01-06,
+            # Anime Raws, Anime LQ Groups
+            - trash_id: f206572b1147d0221bb1c96765b349e8
+              select_all: true
+              assign_scores_to:
+                - name: Anime
+            # [Streaming Services] Anime (ABEMA, CR, HIDIVE, ...)
+            - trash_id: f54985e5e96747cef58731f1cf4c9181
+              assign_scores_to:
+                - name: Anime
 
         custom_formats:
-          # TRaSH guides scoring; x265 NOT penalised (library is x265-heavy)
+          # Owner decision (plan section 8): Dual Audio high, Uncensored
+          # preferred. TRaSH scores both 0 (informational) in the anime table.
           - trash_ids:
-              - e6258996055b9fbab7e9cb2f75419296  # Low Quality Releases
-              - 9c11cd3f07103b15cd554b92c0d2d809  # Obfuscated
-              - 47435ece6b99a0b477caf360e79ba0bb  # x265 (HD) - deliberately NOT included
-            quality_profiles:
-              - name: HD->UHD Upgrade
+              - 418f50b10f1907201b6cfdf881f467b7  # Anime Dual Audio
+            assign_scores_to:
+              - name: Anime
+                score: 1000
+          - trash_ids:
+              - 026d5aadd1a6b4e550b134cb6c72b3ca  # Uncensored
+            assign_scores_to:
+              - name: Anime
+                score: 500
