@@ -2,14 +2,15 @@
 # Phase 0: create the media service users and the /srv/appdata tree.
 #
 # New users are created WITHOUT pinned UIDs (owner decision 2026-09-13);
-# useradd assigns them from the system range. The assigned UIDs are recorded
-# in docs/storage-layout.md after this script first runs and used as
-# PUID/runAsUser in the app manifests. Pre-existing users keep their UIDs
-# (qbittorrent 1005, jellyfin 1004, radarr 973, sonarr 972).
+# useradd assigns them from the system range. Assigned UIDs are recorded in
+# docs/storage-layout.md and used as PUID/runAsUser in the app manifests.
+# Pre-existing users keep their UIDs (qbittorrent 1005, jellyfin 1004,
+# radarr 973, sonarr 972).
 #
-# NOTE for disaster recovery: a rebuilt host may auto-assign different UIDs.
-# Before running this on a rebuilt host, pin the recorded UIDs below with
-# `useradd -r -u <uid> -g media ...` (see docs/disaster-recovery.md).
+# UIDs ASSIGNED 2026-09-13 (recorded for disaster recovery - pin these with
+# `useradd -r -u <uid> -g media` when recreating on a rebuilt host):
+#   prowlarr 959, bazarr 971 (primary group 971 `bazarr`, not media - pods
+#   use PGID=1003), seerr 958, shoko 957, recyclarr 956, unpackerr 955.
 #
 # Run as root: sudo bash bootstrap/host/create-users.sh
 set -euo pipefail
