@@ -9,13 +9,26 @@ via hardlink -> Jellyfin library update -> Seerr marks Available.
 
 ## Categories (qBittorrent)
 
+Existing categories were REUSED (519 torrents reference them); two new ones
+added (2026-09-13):
+
 | Category | Save path | Used by |
 |---|---|---|
-| radarr | `/srv/Media/Torrents/completed/movies` | Radarr |
-| tv-sonarr | `/srv/Media/Torrents/completed/tv` | Sonarr TV |
-| anime-sonarr | `/srv/Media/Torrents/completed/anime` | Sonarr anime (new) |
+| Movies | `/srv/Media/Torrents/completed/movies` (stored as `/srv/misc/torrents/completed/movies`, resolves via compat mount) | Radarr download client |
+| TV | `/srv/Media/Torrents/completed/tv` (stored as `/srv/misc/torrents/completed/tv`, resolves via compat mount) | Sonarr TV client |
+| anime-sonarr | `/srv/Media/Torrents/completed/anime` | Sonarr anime client (tagged `anime`) |
 | manual | `/srv/Media/Torrents/completed/manual` | manual multi-season packs |
-| anime-direct | `/srv/Media/Anime` | anime batches (Shoko by hash) |
+| Anime | `/srv/Media/Anime` | anime batches (Shoko by hash) |
+| Porn | `/srv/Media/Porn` | unchanged, no arr integration |
+
+WebUI settings applied via API (Phase 2): localhost auth bypass ON; subnet
+whitelist bypass ON (`10.0.0.0/24`, `10.42.0.0/16` - host and pod traffic);
+queueing ON with max active downloads 5 / max active torrents 20 (NOTE: caps
+concurrently-active seeding torrents at 20; 516 of 519 seed torrents are
+queuedUP by design. Change `queueing_enabled`/`max_active_torrents` in
+WebUI if seed throughput matters more than disk head-thrash protection);
+pre-allocate ON; content layout Original; finished `.torrent` export to
+`/srv/Media/Torrents/completed/torrents`.
 
 ## Multi-season packs
 

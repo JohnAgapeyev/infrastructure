@@ -20,12 +20,13 @@ JAR=$(mktemp)
 trap 'rm -f "$JAR"' EXIT
 
 if [ -n "${QBIT_WEBUI_PASS:-}" ]; then
-  curl -s -c "$JAR" --data-urlencode "username=${QBIT_WEBUI_USER:-admin}" \
+  # Referer header required: WebUI CSRF protection rejects bare POSTs.
+  curl -s -c "$JAR" -H "Referer: $BASE/" --data-urlencode "username=${QBIT_WEBUI_USER:-admin}" \
     --data-urlencode "password=${QBIT_WEBUI_PASS}" \
     "$BASE/api/v2/auth/login" >/dev/null
 fi
 
-api() { curl -s -b "$JAR" "$@"; }
+api() { curl -s -b "$JAR" -H "Referer: $BASE/" "$@"; }
 
 echo "== version (expect 5.2.3) =="
 api "$BASE/api/v2/app/version"; echo
@@ -34,10 +35,12 @@ echo "== transfer info (connection_status, speeds) =="
 api "$BASE/api/v2/transfer/info"; echo
 
 echo "== torrents: count / bad states / distinct save paths =="
-api "$BASE/api/v2/torrents/info" | python3 - "$EXPECTED" <<'EOF'
+TLIST=$(mktemp); trap 'rm -f "$JAR" "$TLIST"' EXIT
+api "$BASE/api/v2/torrents/info" > "$TLIST"
+python3 - "$EXPECTED" "$TLIST" <<'EOF'
 import json, sys
-expect = int(sys.argv[1])
-ts = json.load(sys.stdin)
+expect, path = int(sys.argv[1]), sys.argv[2]
+ts = json.load(open(path))
 print("count:", len(ts), "expected:", expect, "->", "OK" if len(ts) == expect else "MISMATCH")
 bad = [t for t in ts if t["state"] in ("missingFiles", "error")]
 print("missing/error:", len(bad))
@@ -53,7 +56,7 @@ for p, c in sorted(paths.items()):
 EOF
 
 echo "== every distinct save_path exists inside the pod =="
-api "$BASE/api/v2/torrents/info" | python3 -c 'import json,sys; print("\n".join(sorted({t["save_path"] for t in json.load(sys.stdin)})))' |
+python3 -c 'import json,sys; print("\n".join(sorted({t["save_path"] for t in json.load(open(sys.argv[1]))})))' "$TLIST" |
 while IFS= read -r p; do
   if kubectl -n media exec deploy/qbittorrent -- test -d "$p" 2>/dev/null; then
     echo "OK  $p"

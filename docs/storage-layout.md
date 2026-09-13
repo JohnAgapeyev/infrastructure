@@ -24,8 +24,14 @@ All app state lives on `/srv` (RAID).
   temp path (if enabled).
 - `/srv/appdata/<app>` - app state (see below); `_snapshots/` - SQLite online
   backups; `_scripts/` - scripts deployed on the host (snapshot-sqlite.sh).
-- Samba shares on the host point into `/srv/Media/*` and `/srv/misc`; they are
-  unaffected by the migration.
+- `/srv/misc/torrents` is a host symlink -> `/srv/Media/Torrents` (the qbit
+  pod additionally mounts the real dir at `/srv/misc/torrents` = compat
+  mount A; the Samba `[temp]` share does NOT follow the symlink - expected).
+- WebUI auth: localhost bypass + subnet whitelist bypass (10.0.0.0/24,
+  10.42.0.0/16) are ON, so LAN browsers, host scripts, and cluster pods do
+  not need the WebUI password. The stored PBKDF2 hash migrated unchanged;
+  the WebUI username is `admin` (secrets/qbittorrent.env had `john` -
+  flagged to owner to fix or reset).
 
 ## UIDs / GIDs
 
