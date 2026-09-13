@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: jellyfin }
+  template:
+    metadata:
+      labels: { app: jellyfin }
+    spec:
+      securityContext:
+        runAsUser: 1004
+        runAsGroup: 1003
+        fsGroup: 1003
+      containers:
+        - name: jellyfin
+          image: jellyfin/jellyfin:10.11.11
+          env:
+            - { name: TZ, value: America/Vancouver }
+            - { name: JELLYFIN_PublishedServerUrl, value: "http://jellyfin.lan" }
+          ports:
+            - name: http
+              containerPort: 8096
+            - name: discovery
+              containerPort: 7359
+              hostPort: 7359
+              protocol: UDP
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: cache, mountPath: /cache }
+            # read-write: Jellyfin writes nfo/images today
+            - { name: media, mountPath: /srv/Media }
+          readinessProbe:
+            httpGet: { path: /health, port: 8096 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8096 }
+            initialDelaySeconds: 60
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { memory: 6Gi }
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/jellyfin, type: Directory }
+        - name: cache
+          hostPath: { path: /srv/appdata/jellyfin-cache, type: Directory }
+        - name: media
+          hostPath: { path: /srv/Media, type: Directory }
