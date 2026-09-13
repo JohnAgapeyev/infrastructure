@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: radarr }
+  template:
+    metadata:
+      labels: { app: radarr }
+    spec:
+      containers:
+        - name: radarr
+          image: lscr.io/linuxserver/radarr:5.28.0
+          env:
+            - { name: PUID, value: "973" }
+            - { name: PGID, value: "1003" }
+            - { name: UMASK, value: "002" }
+            - { name: TZ, value: America/Vancouver }
+          ports:
+            - name: http
+              containerPort: 7878
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            # ONE mount for library + torrents: hardlinks never cross mounts
+            - { name: media, mountPath: /srv/Media }
+          readinessProbe:
+            httpGet: { path: /ping, port: 7878 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /ping, port: 7878 }
+            periodSeconds: 60
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/radarr, type: Directory }
+        - name: media
+          hostPath: { path: /srv/Media, type: Directory }

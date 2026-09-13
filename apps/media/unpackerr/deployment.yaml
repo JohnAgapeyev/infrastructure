@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unpackerr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: unpackerr }
+  template:
+    metadata:
+      labels: { app: unpackerr }
+    spec:
+      securityContext:
+        runAsUser: 955
+        runAsGroup: 1003
+        fsGroup: 1003
+      containers:
+        - name: unpackerr
+          image: ghcr.io/unpackerr/unpackerr:v0.16.1
+          env:
+            - { name: TZ, value: America/Vancouver }
+            - { name: UN_CMD, value: "3" }
+            # api keys injected from secret via UN_ env vars below
+          envFrom:
+            - secretRef:
+                name: unpackerr-apikeys
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: media, mountPath: /srv/Media }
+            - { name: unpackerr-conf, mountPath: /config/unpackerr.conf, subPath: unpackerr.conf }
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "pgrep -f unpackerr"]
+            periodSeconds: 15
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/unpackerr, type: Directory }
+        - name: media
+          hostPath: { path: /srv/Media, type: Directory }
+        - name: unpackerr-conf
+          configMap:
+            name: unpackerr-config

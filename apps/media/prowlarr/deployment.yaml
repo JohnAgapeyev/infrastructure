@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prowlarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: prowlarr }
+  template:
+    metadata:
+      labels: { app: prowlarr }
+    spec:
+      containers:
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:2.5.2
+          env:
+            - { name: PUID, value: "959" }
+            - { name: PGID, value: "1003" }
+            - { name: UMASK, value: "002" }
+            - { name: TZ, value: America/Vancouver }
+          ports:
+            - name: http
+              containerPort: 9696
+          volumeMounts:
+            - { name: config, mountPath: /config }
+          readinessProbe:
+            httpGet: { path: /, port: 9696 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 9696 }
+            periodSeconds: 60
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/prowlarr, type: Directory }

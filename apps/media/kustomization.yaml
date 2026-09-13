@@ -3,3 +3,10 @@ kind: Kustomization
 resources:
   - qbittorrent
   - jellyfin
+  - flaresolverr
+  - prowlarr
+  - radarr
+  - sonarr
+  - bazarr
+  - recyclarr
+  - unpackerr

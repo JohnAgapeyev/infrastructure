@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recyclarr-config
+  namespace: media
+data:
+  recyclarr.yml: |
+    sonarr:
+      instance1:
+        base_url: http://sonarr.media.svc.cluster.local:8989
+        api_key: !secret sonarr_api_key
+
+        delete_old_custom_formats: true
+        replace_existing_custom_formats: true
+
+        quality_definition:
+          type: series
+
+        quality_profiles:
+          - name: HD->UHD Upgrade
+            upgrade:
+              allowed: true
+              until_quality: Bluray-2160p Remux
+              until_score: 10000
+            qualities:
+              - name: WEBRip-1080p
+                qualities: [WEBRip-1080p]
+              - name: WEBDL-1080p
+                qualities: [WEBDL-1080p]
+              - name: Bluray-1080p
+                qualities: [Bluray-1080p]
+              - name: HDTV-1080p
+                qualities: [HDTV-1080p]
+              - name: WEBRip-2160p
+                qualities: [WEBRip-2160p]
+              - name: WEBDL-2160p
+                qualities: [WEBDL-2160p]
+              - name: Bluray-2160p
+                qualities: [Bluray-2160p]
+              - name: Bluray-2160p Remux
+                qualities: [Bluray-2160p Remux]
+
+        custom_formats:
+          # TRaSH guides scoring; x265 NOT penalised (library is x265-heavy)
+          - trash_ids:
+              - e6258996055b9fbab7e9cb2f75419296  # Low Quality Releases (BR-DISK etc. bucket)
+              - 47435ece6b99a0b477caf360e79ba0bb  # x265 (HD) - deliberately NOT included
+            quality_profiles:
+              - name: HD->UHD Upgrade
+
+    radarr:
+      instance1:
+        base_url: http://radarr.media.svc.cluster.local:7878
+        api_key: !secret radarr_api_key
+
+        delete_old_custom_formats: true
+        replace_existing_custom_formats: true
+
+        quality_definition:
+          type: movie
+
+        quality_profiles:
+          - name: HD->UHD Upgrade
+            upgrade:
+              allowed: true
+              until_quality: Remux-2160p
+              until_score: 10000
+            qualities:
+              - name: WEBRip-1080p
+                qualities: [WEBRip-1080p]
+              - name: WEBDL-1080p
+                qualities: [WEBDL-1080p]
+              - name: Bluray-1080p
+                qualities: [Bluray-1080p]
+              - name: HDTV-1080p
+                qualities: [HDTV-1080p]
+              - name: WEBRip-2160p
+                qualities: [WEBRip-2160p]
+              - name: WEBDL-2160p
+                qualities: [WEBDL-2160p]
+              - name: Bluray-2160p
+                qualities: [Bluray-2160p]
+              - name: Remux-2160p
+                qualities: [Remux-2160p]
+
+        custom_formats:
+          # TRaSH guides scoring; x265 NOT penalised (library is x265-heavy)
+          - trash_ids:
+              - e6258996055b9fbab7e9cb2f75419296  # Low Quality Releases
+              - 9c11cd3f07103b15cd554b92c0d2d809  # Obfuscated
+              - 47435ece6b99a0b477caf360e79ba0bb  # x265 (HD) - deliberately NOT included
+            quality_profiles:
+              - name: HD->UHD Upgrade

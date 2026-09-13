@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: recyclarr
+  namespace: media
+spec:
+  # 05:30 local daily - after the 03:00/02:00 Jellyfin tasks, before the
+  # 11:30 PM maintenance window
+  schedule: "30 5 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 956
+            runAsGroup: 1003
+            fsGroup: 1003
+          containers:
+            - name: recyclarr
+              image: ghcr.io/recyclarr/recyclarr:v8.7.2
+              args: ["sync"]
+              env:
+                - { name: TZ, value: America/Vancouver }
+                - { name: RECYCLARR_APPDATA, value: /config }
+              volumeMounts:
+                - { name: config, mountPath: /config }
+                - { name: config-yml, mountPath: /config/recyclarr.yml, subPath: recyclarr.yml }
+                - { name: secrets, mountPath: /config/secrets.yml, subPath: recyclarr.yml }
+          volumes:
+            - name: config
+              hostPath: { path: /srv/appdata/recyclarr, type: Directory }
+            - name: config-yml
+              configMap:
+                name: recyclarr-config
+            # created by kustomize secretGenerator from secrets/recyclarr.yml
+            - name: secrets
+              secret:
+                secretName: recyclarr-secrets-yml
