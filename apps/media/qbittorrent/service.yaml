@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  # klipper servicelb binds host port 8080 -> pod (legacy URL http://nas:8080)
+  type: LoadBalancer
+  selector: { app: qbittorrent }
+  ports:
+    - name: web
+      port: 8080
+      targetPort: 8080

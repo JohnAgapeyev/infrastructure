@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: qbittorrent }
+  template:
+    metadata:
+      labels: { app: qbittorrent }
+    spec:
+      containers:
+        - name: qbittorrent
+          image: lscr.io/linuxserver/qbittorrent:5.2.3
+          env:
+            - { name: PUID, value: "1005" }
+            - { name: PGID, value: "1003" }
+            - { name: UMASK, value: "002" }
+            - { name: TZ, value: America/Vancouver }
+            - { name: WEBUI_PORT, value: "8080" }
+            - { name: TORRENTING_PORT, value: "41045" }
+          ports:
+            - name: web
+              containerPort: 8080
+            - name: bt-tcp
+              containerPort: 41045
+              hostPort: 41045
+              protocol: TCP
+            - name: bt-udp
+              containerPort: 41045
+              hostPort: 41045
+              protocol: UDP
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: media, mountPath: /srv/Media }
+            - { name: torrents-compat, mountPath: /srv/misc/torrents }
+          readinessProbe:
+            tcpSocket: { port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+            periodSeconds: 60
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/qbittorrent, type: Directory }
+        - name: media
+          hostPath: { path: /srv/Media, type: Directory }
+        # compat mount (A): keeps ~519 fastresume save paths valid
+        - name: torrents-compat
+          hostPath: { path: /srv/Media/Torrents, type: Directory }
