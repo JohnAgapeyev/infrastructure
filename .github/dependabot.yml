@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: ["/apps/**"]
+    schedule: { interval: weekly, day: sunday }
+    groups:
+      linuxserver: { patterns: ["lscr.io/linuxserver/*"] }
+      exporters: { patterns: ["*exporter*", "ghcr.io/onedr0p/exportarr"] }
+      home: { patterns: ["ghcr.io/home-assistant/*", "ghcr.io/matter-js/*"] }
+    ignore:
+      - dependency-name: "jellyfin/jellyfin"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: helm
+    directory: "/apps/observability/kube-prometheus-stack"
+    schedule: { interval: weekly, day: sunday }

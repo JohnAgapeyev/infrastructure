@@ -1,0 +1,44 @@
+# Media workflow
+
+(Filled in during Phase 4-6. Draft below from PLAN.md.)
+
+## Request flow
+
+Seerr (http://seerr.lan) -> Radarr/Sonarr -> qBittorrent (category) -> import
+via hardlink -> Jellyfin library update -> Seerr marks Available.
+
+## Categories (qBittorrent)
+
+| Category | Save path | Used by |
+|---|---|---|
+| radarr | `/srv/Media/Torrents/completed/movies` | Radarr |
+| tv-sonarr | `/srv/Media/Torrents/completed/tv` | Sonarr TV |
+| anime-sonarr | `/srv/Media/Torrents/completed/anime` | Sonarr anime (new) |
+| manual | `/srv/Media/Torrents/completed/manual` | manual multi-season packs |
+| anime-direct | `/srv/Media/Anime` | anime batches (Shoko by hash) |
+
+## Multi-season packs
+
+Sonarr rejects multi-season packs by design. Add the magnet in qBittorrent
+with category `manual`; when complete: Sonarr -> Wanted -> Manual Import ->
+`/srv/Media/Torrents/completed/manual/<pack>`; Sonarr parses each SxxEyy file
+and hardlinks into the series folder. Anime batches: category `anime-direct`
+(saves straight into `/srv/Media/Anime`); Shoko identifies by hash.
+
+## Anime
+
+Existing anime is owned by Shoko Server (AniDB hash matching), exposed to
+Jellyfin through the Shokofin plugin (VFS). Sonarr only handles NEW anime via
+root folder `/srv/Media/Anime` + profile "Anime".
+
+## Quality / upgrades
+
+Single Radarr + single Sonarr with TRaSH profiles synced by Recyclarr
+(daily CronJob). Upgrades allowed up to Remux-2160p cutoff. The arr stack
+grabs the BEST-scoring release available at request time, then upgrades via
+RSS until the cutoff; it does not deliberately grab a small file first.
+
+## Indexers
+
+Prowlarr manages indexers and syncs them to Radarr/Sonarr. Public trackers
+are the weak link; adding a private tracker later improves everything.

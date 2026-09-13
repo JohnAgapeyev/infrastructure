@@ -42,3 +42,14 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+# Secrets (examples are committed, real values are not)
+secrets/*.env
+secrets/*.yml
+secrets/*.yaml
+
+# Helm chart vendoring
+charts/
+
+# kubeconfigs
+*.kubeconfig
