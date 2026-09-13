@@ -1,0 +1,5 @@
+# k3s server config -> /etc/rancher/k3s/config.yaml
+# Single node `nas`. Bundled traefik, servicelb (klipper), local-storage,
+# coredns and metrics-server stay enabled (defaults).
+write-kubeconfig-mode: "0644"
+node-name: nas
