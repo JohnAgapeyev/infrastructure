@@ -21,7 +21,7 @@ spec:
             fsGroup: 1003
           containers:
             - name: recyclarr
-              image: ghcr.io/recyclarr/recyclarr:v8.7.2
+              image: ghcr.io/recyclarr/recyclarr:8.7.2
               args: ["sync"]
               env:
                 - { name: TZ, value: America/Vancouver }
