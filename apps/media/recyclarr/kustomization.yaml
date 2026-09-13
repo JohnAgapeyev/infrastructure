@@ -9,4 +9,4 @@ secretGenerator:
   - name: recyclarr-secrets-yml
     namespace: media
     files:
-      - recyclarr.yml=secrets/recyclarr.yml
+      - recyclarr.yml=../../../secrets/recyclarr.yml

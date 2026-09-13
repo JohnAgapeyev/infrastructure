@@ -7,5 +7,5 @@ generatorOptions:
 secretGenerator:
   - name: unpackerr-apikeys
     namespace: media
-    env: secrets/unpackerr.env
+    env: ../../../secrets/unpackerr.env
     type: Opaque
