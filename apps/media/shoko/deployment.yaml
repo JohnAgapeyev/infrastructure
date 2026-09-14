@@ -30,7 +30,7 @@ spec:
             # READ-ONLY: Shoko must never move/rename library files
             - { name: media, mountPath: /srv/Media, readOnly: true }
           readinessProbe:
-            httpGet: { path: /api/init, port: 8111 }
+            httpGet: { path: /webui/index.html, port: 8111 }
             periodSeconds: 15
           resources:
             limits: { memory: 4Gi }
