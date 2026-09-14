@@ -39,10 +39,10 @@ spec:
             - { name: media, mountPath: /srv/Media }
             - { name: torrents-compat, mountPath: /srv/misc/torrents }
           readinessProbe:
-            tcpSocket: { port: 8080 }
+            httpGet: { path: /api/v2/app/version, port: 8080 }
             periodSeconds: 10
           livenessProbe:
-            tcpSocket: { port: 8080 }
+            httpGet: { path: /api/v2/app/version, port: 8080 }
             periodSeconds: 60
       volumes:
         - name: config
