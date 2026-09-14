@@ -1,0 +1,57 @@
+# smartctl-exporter: RAID member health (the most important metric on this box)
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: smartctl-exporter
+  namespace: observability
+  labels: { app: smartctl-exporter }
+spec:
+  selector:
+    matchLabels: { app: smartctl-exporter }
+  template:
+    metadata:
+      labels: { app: smartctl-exporter }
+    spec:
+      containers:
+        - name: smartctl-exporter
+          image: quay.io/prometheuscommunity/smartctl-exporter:v0.14.0
+          args:
+            - --smartctl.path=/usr/sbin/smartctl
+            - --smartctl.interval=300s
+            - --web.listen-address=:9633
+          ports:
+            - name: http
+              containerPort: 9633
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - { name: dev, mountPath: /dev }
+      volumes:
+        - name: dev
+          hostPath: { path: /dev, type: Directory }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smartctl-exporter
+  namespace: observability
+  labels: { app: smartctl-exporter }
+spec:
+  selector: { app: smartctl-exporter }
+  ports:
+    - name: http
+      port: 9633
+      targetPort: 9633
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: smartctl-exporter
+  namespace: observability
+  labels: { app: smartctl-exporter }
+spec:
+  selector:
+    matchLabels: { app: smartctl-exporter }
+  endpoints:
+    - port: http
+      interval: 300s

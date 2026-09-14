@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - node-exporter-full.yaml
+  - smartctl.yaml
+  - qbittorrent-exporter.yaml
+  - traefik.yaml
+  - exportarr.yaml

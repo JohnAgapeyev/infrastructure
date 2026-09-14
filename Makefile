@@ -25,11 +25,14 @@ apply-home:
 
 # Observability is a Helm umbrella chart + kustomize exporters/dashboards/rules
 apply-observability:
+	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/kube-prometheus-stack | kubectl apply -f -
 	helm dependency update apps/observability/kube-prometheus-stack
 	helm upgrade --install observability apps/observability/kube-prometheus-stack \
 		-n observability -f apps/observability/kube-prometheus-stack/values.yaml
-	kubectl apply -k apps/observability/exporters
-	kubectl apply -k apps/observability/dashboards
-	kubectl apply -f apps/observability/rules/prometheusrule.yaml
+	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/exporters | kubectl apply -f -
+	# server-side apply: large dashboard ConfigMaps exceed the 256 KiB
+	# client-side last-applied annotation limit
+	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/dashboards | kubectl apply --server-side --force-conflicts -f -
+	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/rules | kubectl apply -f -
 
 apply-all: apply-cluster apply-media apply-home apply-observability

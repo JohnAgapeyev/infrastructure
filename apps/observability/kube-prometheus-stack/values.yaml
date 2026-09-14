@@ -1,0 +1,124 @@
+# Values for the observability umbrella chart. Everything under
+# `kube-prometheus-stack:` maps to the wrapped chart.
+kube-prometheus-stack:
+  # k3s does not expose these control-plane endpoints; disabled to avoid
+  # permanent TargetDown alerts
+  kubeControllerManager:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  kubeEtcd:
+    enabled: false
+  kubeProxy:
+    enabled: false
+
+  # harden/quiet: no default Ingresses for prometheus/alertmanager (we define ours)
+  prometheus:
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      hosts:
+        - prometheus.lan
+      paths: ["/"]
+    prometheusSpec:
+      retention: 30d
+      retentionSize: 40GB
+      # pick up ALL ServiceMonitors/PodMonitors/Rules in the cluster, not
+      # only the chart's own (the most common footgun)
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      serviceMonitorSelector: {}
+      podMonitorSelector: {}
+      ruleSelector: {}
+      # hostPath TSDB via static PV/PVC (disposable by decision; excluded from
+      # backups). NOTE: plain volumes/volumeMounts CANNOT be used here - the
+      # operator always adds its own storage volume at /prometheus and
+      # rejects duplicate mounts. Static hostPath PV + volumeName binding is
+      # the minimal operator-compatible way to keep data on /srv.
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: ""
+            volumeName: prometheus-data
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 40Gi
+      resources:
+        requests: { cpu: 200m, memory: 512Mi }
+        limits: { memory: 2Gi }
+
+  grafana:
+    admin:
+      existingSecret: grafana-admin
+      adminUserKey: admin-user
+      adminPasswordKey: admin-password
+    # hostPath persistence via extraVolumes (the chart's own persistence is
+    # PVC-based, which we avoid). Data dir moved off /var/lib/grafana to
+    # avoid clashing with the chart's default emptyDir mount.
+    persistence:
+      enabled: false
+    extraVolumes:
+      - name: grafana-data
+        hostPath:
+          path: /srv/appdata/grafana
+          type: Directory
+    extraVolumeMounts:
+      - name: grafana-data
+        mountPath: /grafana-data
+    grafana.ini:
+      paths:
+        data: /grafana-data
+        plugins: /grafana-data/plugins
+    deploymentStrategy:
+      type: Recreate
+    sidecar:
+      dashboards:
+        enabled: true
+        searchNamespace: ALL
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      hosts:
+        - grafana.lan
+      path: "/"
+
+  alertmanager:
+    enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      hosts:
+        - alertmanager.lan
+      paths: ["/"]
+    alertmanagerSpec:
+      # hostPath via static PV/PVC (same operator constraint as prometheus)
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: ""
+            volumeName: alertmanager-data
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 2Gi
+    # single null receiver; Watchdog/InfoInhibitor routed to it. Real
+    # receivers (phone/email) deferred per owner decision.
+    config:
+      global: {}
+      route:
+        group_by: ["alertname"]
+        receiver: "null"
+        routes:
+          - matchers:
+              - alertname =~ "Watchdog|InfoInhibitor"
+            receiver: "null"
+      receivers:
+        - name: "null"
+
+  prometheus-node-exporter:
+    extraArgs:
+      - --collector.mdadm
+      - --collector.hwmon
+      - --collector.thermal_zone

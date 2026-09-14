@@ -1,0 +1,202 @@
+# exportarr x4: radarr, sonarr, prowlarr, bazarr (API keys from arr-apikeys Secret)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exportarr-radarr
+  namespace: observability
+  labels: { app: exportarr-radarr }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: exportarr-radarr }
+  template:
+    metadata:
+      labels: { app: exportarr-radarr }
+    spec:
+      containers:
+        - name: exportarr-radarr
+          image: ghcr.io/onedr0p/exportarr:v2.3.0
+          args: [radarr]
+          env:
+            - { name: URL, value: "http://radarr.media.svc.cluster.local:7878" }
+            - name: APIKEY
+              valueFrom: { secretKeyRef: { name: arr-apikeys, key: RADARR_APIKEY } }
+            - { name: PORT, value: "9790" }
+            - { name: ENABLE_ADDITIONAL_METRICS, value: "true" }
+          ports:
+            - { name: http, containerPort: 9790 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exportarr-radarr
+  namespace: observability
+  labels: { app: exportarr-radarr }
+spec:
+  selector: { app: exportarr-radarr }
+  ports:
+    - { name: http, port: 9790, targetPort: 9790 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: exportarr-radarr
+  namespace: observability
+  labels: { app: exportarr-radarr }
+spec:
+  selector:
+    matchLabels: { app: exportarr-radarr }
+  endpoints:
+    - { port: http, interval: 60s }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exportarr-sonarr
+  namespace: observability
+  labels: { app: exportarr-sonarr }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: exportarr-sonarr }
+  template:
+    metadata:
+      labels: { app: exportarr-sonarr }
+    spec:
+      containers:
+        - name: exportarr-sonarr
+          image: ghcr.io/onedr0p/exportarr:v2.3.0
+          args: [sonarr]
+          env:
+            - { name: URL, value: "http://sonarr.media.svc.cluster.local:8989" }
+            - name: APIKEY
+              valueFrom: { secretKeyRef: { name: arr-apikeys, key: SONARR_APIKEY } }
+            - { name: PORT, value: "9791" }
+            - { name: ENABLE_ADDITIONAL_METRICS, value: "true" }
+          ports:
+            - { name: http, containerPort: 9791 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exportarr-sonarr
+  namespace: observability
+  labels: { app: exportarr-sonarr }
+spec:
+  selector: { app: exportarr-sonarr }
+  ports:
+    - { name: http, port: 9791, targetPort: 9791 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: exportarr-sonarr
+  namespace: observability
+  labels: { app: exportarr-sonarr }
+spec:
+  selector:
+    matchLabels: { app: exportarr-sonarr }
+  endpoints:
+    - { port: http, interval: 60s }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exportarr-prowlarr
+  namespace: observability
+  labels: { app: exportarr-prowlarr }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: exportarr-prowlarr }
+  template:
+    metadata:
+      labels: { app: exportarr-prowlarr }
+    spec:
+      containers:
+        - name: exportarr-prowlarr
+          image: ghcr.io/onedr0p/exportarr:v2.3.0
+          args: [prowlarr]
+          env:
+            - { name: URL, value: "http://prowlarr.media.svc.cluster.local:9696" }
+            - name: APIKEY
+              valueFrom: { secretKeyRef: { name: arr-apikeys, key: PROWLARR_APIKEY } }
+            - { name: PORT, value: "9792" }
+          ports:
+            - { name: http, containerPort: 9792 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exportarr-prowlarr
+  namespace: observability
+  labels: { app: exportarr-prowlarr }
+spec:
+  selector: { app: exportarr-prowlarr }
+  ports:
+    - { name: http, port: 9792, targetPort: 9792 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: exportarr-prowlarr
+  namespace: observability
+  labels: { app: exportarr-prowlarr }
+spec:
+  selector:
+    matchLabels: { app: exportarr-prowlarr }
+  endpoints:
+    - { port: http, interval: 60s }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exportarr-bazarr
+  namespace: observability
+  labels: { app: exportarr-bazarr }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: exportarr-bazarr }
+  template:
+    metadata:
+      labels: { app: exportarr-bazarr }
+    spec:
+      containers:
+        - name: exportarr-bazarr
+          image: ghcr.io/onedr0p/exportarr:v2.3.0
+          args: [bazarr]
+          env:
+            - { name: URL, value: "http://bazarr.media.svc.cluster.local:6767" }
+            - name: APIKEY
+              valueFrom: { secretKeyRef: { name: arr-apikeys, key: BAZARR_APIKEY } }
+            - { name: PORT, value: "9793" }
+          ports:
+            - { name: http, containerPort: 9793 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exportarr-bazarr
+  namespace: observability
+  labels: { app: exportarr-bazarr }
+spec:
+  selector: { app: exportarr-bazarr }
+  ports:
+    - { name: http, port: 9793, targetPort: 9793 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: exportarr-bazarr
+  namespace: observability
+  labels: { app: exportarr-bazarr }
+spec:
+  selector:
+    matchLabels: { app: exportarr-bazarr }
+  endpoints:
+    - { port: http, interval: 120s }

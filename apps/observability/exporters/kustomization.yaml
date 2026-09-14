@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - smartctl.yaml
+  - exportarr.yaml
+  - qbittorrent.yaml
+  - jellyfin-traefik.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  - name: arr-apikeys
+    namespace: observability
+    env: ../../../secrets/arr.env
+    type: Opaque
+  - name: qbittorrent-creds
+    namespace: observability
+    env: ../../../secrets/qbittorrent.env
+    type: Opaque

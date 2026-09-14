@@ -1,0 +1,9 @@
+apiVersion: v2
+name: observability
+description: Umbrella chart wrapping kube-prometheus-stack (Dependabot bumps the dependency version)
+type: application
+version: 0.1.0
+dependencies:
+  - name: kube-prometheus-stack
+    version: 91.3.0
+    repository: https://prometheus-community.github.io/helm-charts

@@ -1,0 +1,48 @@
+# Plan section 11.4 alerts. Pod restart/OOM/reboot alerts come from the
+# chart's default rules (upstream PrometheusRule CRDs).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: media-and-storage-rules
+  namespace: observability
+  labels:
+    release: observability
+spec:
+  groups:
+    - name: storage
+      rules:
+        - alert: HostMdadmDisksFailed
+          expr: node_md_disks{state="failed"} > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "mdadm has failed disks ({{ $labels.device }})"
+            description: "RAID member failed: {{ $labels.device }} on {{ $labels.instance }}"
+        - alert: SrvFilesystemNearlyFull
+          expr: node_filesystem_avail_bytes{mountpoint="/srv"} < 500000000000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "/srv below 500 GB free"
+            description: "Media array has {{ $value | humanize1024 }} free (< 500 GB). Imports will stall soon."
+        - alert: SmartDeviceUnhealthy
+          expr: smartctl_device_smart_status != 1
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SMART status failed for {{ $labels.device }}"
+            description: "smartctl reports non-healthy SMART status for {{ $labels.device }}"
+    - name: media
+      rules:
+        - alert: MediaServiceDown
+          expr: |
+            up{job=~"exportarr-(radarr|sonarr|prowlarr|bazarr)|qbittorrent-exporter|jellyfin"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.job }} has been down for >10m"
+            description: "Prometheus cannot scrape {{ $labels.job }} at {{ $labels.instance }}"

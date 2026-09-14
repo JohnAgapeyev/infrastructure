@@ -1,0 +1,53 @@
+# qbittorrent-exporter (WebUI creds from the qbittorrent Secret)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent-exporter
+  namespace: observability
+  labels: { app: qbittorrent-exporter }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: qbittorrent-exporter }
+  template:
+    metadata:
+      labels: { app: qbittorrent-exporter }
+    spec:
+      containers:
+        - name: qbittorrent-exporter
+          image: ghcr.io/martabal/qbittorrent-exporter:v2.0.3
+          env:
+            - { name: QBITTORRENT_BASE_URL, value: "http://qbittorrent.media.svc.cluster.local:8080" }
+            - name: QBITTORRENT_USERNAME
+              valueFrom: { secretKeyRef: { name: qbittorrent-creds, key: QBIT_WEBUI_USER } }
+            - name: QBITTORRENT_PASSWORD
+              valueFrom: { secretKeyRef: { name: qbittorrent-creds, key: QBIT_WEBUI_PASS } }
+            # qBittorrent >= 5.2 renamed the session cookie SID -> QBT_SID_<port>
+            - { name: QBITTORRENT_COOKIE_NAME, value: "QBT_SID_8080" }
+            - { name: EXPORTER_PORT, value: "9565" }
+          ports:
+            - { name: http, containerPort: 9565 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent-exporter
+  namespace: observability
+  labels: { app: qbittorrent-exporter }
+spec:
+  selector: { app: qbittorrent-exporter }
+  ports:
+    - { name: http, port: 9565, targetPort: 9565 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qbittorrent-exporter
+  namespace: observability
+  labels: { app: qbittorrent-exporter }
+spec:
+  selector:
+    matchLabels: { app: qbittorrent-exporter }
+  endpoints:
+    - { port: http, interval: 60s }

@@ -1,0 +1,40 @@
+# Static hostPath PVs for the prometheus-operator StatefulSets.
+# The operator always mounts its own storage volume at /prometheus and
+# /alertmanager, so plain volumes/volumeMounts (plan section 11.1) are
+# rejected as duplicates; static PVs bound by name are the minimal
+# operator-compatible way to keep the data on /srv as the plan requires.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus-data
+spec:
+  capacity: { storage: 40Gi }
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath: { path: /srv/appdata/prometheus }
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [nas]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: alertmanager-data
+spec:
+  capacity: { storage: 2Gi }
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  hostPath: { path: /srv/appdata/alertmanager }
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [nas]
