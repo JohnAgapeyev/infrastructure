@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shoko
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: shoko }
+  template:
+    metadata:
+      labels: { app: shoko }
+    spec:
+      # No runAsUser/fsGroup here: the image entrypoint runs as root and drops
+      # to PUID:PGID itself (gosu); a forced non-root user breaks its useradd.
+      containers:
+        - name: shoko
+          image: ghcr.io/shokoanime/server:v5.3.3
+          env:
+            - { name: PUID, value: "957" }
+            - { name: PGID, value: "1003" }
+            - { name: TZ, value: America/Vancouver }
+          ports:
+            - name: http
+              containerPort: 8111
+          volumeMounts:
+            - { name: config, mountPath: /home/shoko/.shoko }
+            # READ-ONLY: Shoko must never move/rename library files
+            - { name: media, mountPath: /srv/Media, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /api/init, port: 8111 }
+            periodSeconds: 15
+          resources:
+            limits: { memory: 4Gi }
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/shoko, type: Directory }
+        - name: media
+          hostPath: { path: /srv/Media, type: Directory }
