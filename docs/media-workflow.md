@@ -2,10 +2,30 @@
 
 (Filled in during Phase 4-6. Draft below from PLAN.md.)
 
-## Request flow
+## Request flow (verified end-to-end 2026-09-13)
 
 Seerr (http://seerr.lan) -> Radarr/Sonarr -> qBittorrent (category) -> import
-via hardlink -> Jellyfin library update -> Seerr marks Available.
+via hardlink (nlink=2 verified) -> library rename to `[tmdbid/tvdbid]` format
+-> Jellyfin library update via Connect -> Seerr "Available".
+
+Test run: Night of the Living Dead (public domain) via 1337x/YTS -> imported
+and visible in Jellyfin, then removed. Public-tracker releases score -10000
+(LQ/Obfuscated CFs) as designed; the arr stack still grabs them when manually
+selected or when nothing better exists.
+
+Notes:
+- Legacy pre-migration torrents in categories Movies/TV sit in the arr queue
+  as "completed/warning: unable to parse" (cosmetic). Some parsed and
+  re-imported as "upgrades"; the replaced links land in
+  `/srv/Media/Torrents/.recycle` (same inode, 14-day cleanup).
+- Radarr 5.28.0 could not authenticate to qBittorrent 5.2.3 (qb 5.2 returns
+  HTTP 204 on login; fixed in Radarr >= 6.3.0) - that is why Radarr runs 6.3.0.
+- Radarr `chownGroup` is left empty: the group name `media` does not exist
+  inside LSIO containers ("Unknown group"). Setgid dirs + UMASK=002 already
+  give group media write access.
+- qBittorrent WebUI whitelist is 10.0.0.0/24 ONLY (LAN). The earlier
+  10.42.0.0/16 entry broke arr client logins (204 login vs "Ok." body).
+  Cluster clients authenticate with credentials (secrets/qbittorrent.env).
 
 ## Categories (qBittorrent)
 
