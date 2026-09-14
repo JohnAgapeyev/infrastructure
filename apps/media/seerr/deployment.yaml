@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seerr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: seerr }
+  template:
+    metadata:
+      labels: { app: seerr }
+    spec:
+      securityContext:
+        runAsUser: 958
+        runAsGroup: 1003
+        fsGroup: 1003
+      containers:
+        - name: seerr
+          image: ghcr.io/seerr-team/seerr:v3.4.1
+          env:
+            - { name: TZ, value: America/Vancouver }
+          ports:
+            - name: http
+              containerPort: 5055
+          volumeMounts:
+            - { name: config, mountPath: /app/config }
+          readinessProbe:
+            httpGet: { path: /api/v1/status, port: 5055 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/status, port: 5055 }
+            periodSeconds: 60
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/seerr, type: Directory }
