@@ -60,9 +60,27 @@ and hardlinks into the series folder. Anime batches: category `anime-direct`
 
 ## Anime
 
-Existing anime is owned by Shoko Server (AniDB hash matching), exposed to
-Jellyfin through the Shokofin plugin (VFS). Sonarr only handles NEW anime via
-root folder `/srv/Media/Anime` + profile "Anime".
+Existing anime is owned by Shoko Server v5.3.3 (AniDB hash matching; scan
+completed 2026-09-14: 3377 files, 225 series), exposed to Jellyfin through
+Shokofin 6.0.5.11 in VFS mode: the plugin generates a virtual
+Season/episode structure (symlinks) under
+`/srv/appdata/jellyfin/Shokofin/VFS/<library-id>/`, and the Jellyfin
+"Anime" library (Shows, Shoko-only providers) points at that VFS root.
+Episodes resolve back to the real files under /srv/Media/Anime.
+
+Operational notes (learned 2026-09-14):
+- Shokofin maps a Jellyfin library folder to Shoko's import folder by
+  sampling ~101 files and asking Shoko if it knows them. If the mapping
+  fails (`IsMapped: false`, VFS stays empty), retrigger once Shoko has
+  indexed the files: set `NeedsRefresh: true` on the library folder entry
+  via the plugin configuration API, then POST /Library/Refresh.
+- Keep the Shoko import folder's DropFolderType at "None": "Source" makes
+  Shoko open files ReadWrite, which fails on the deliberately read-only
+  media mount ("Failed to access" hash errors).
+
+Sonarr handles NEW anime via root folder /srv/Media/Anime + profile
+"Anime"; Shoko's watcher (SignalR -> Shokofin) picks the new files up
+automatically.
 
 ## Quality / upgrades
 
