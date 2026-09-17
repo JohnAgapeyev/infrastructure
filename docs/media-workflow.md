@@ -77,6 +77,13 @@ Operational notes (learned 2026-09-14):
 - Keep the Shoko import folder's DropFolderType at "None": "Source" makes
   Shoko open files ReadWrite, which fails on the deliberately read-only
   media mount ("Failed to access" hash errors).
+- Library structure is "Shoko Groups" (plugin setting
+  DefaultLibraryStructure=Shoko_Groups -> UseGroupsForShows): each Shoko
+  group renders as ONE show, with each member AniDB series as a season
+  (e.g. "Attack on Titan" = S1..Final Season + Specials). Structure
+  changes need a forced full VFS regeneration
+  (IterativeVfsGeneration_ForceFullGenerationOnNextRefresh=true) plus a
+  library scan.
 
 Sonarr handles NEW anime via root folder /srv/Media/Anime + profile
 "Anime"; Shoko's watcher (SignalR -> Shokofin) picks the new files up
