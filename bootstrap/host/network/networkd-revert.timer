@@ -1,0 +1,13 @@
+# -> /etc/systemd/system/networkd-revert.timer  (Phase 9.0 safety net)
+# OnStartupSec counts from systemd start in the real root, i.e. AFTER the
+# tinyssh LUKS unlock, so time spent at the passphrase prompt does not count.
+# Cancel once SSH works: sudo systemctl disable --now networkd-revert.timer
+[Unit]
+Description=Phase 9.0 safety net: revert to dhcpcd unless cancelled
+
+[Timer]
+OnStartupSec=20min
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

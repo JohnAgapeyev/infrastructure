@@ -784,21 +784,97 @@ dashboards; scaling radarr to 0 for 10 min fires the alert in Alertmanager UI.
 
 ## 13. Phase 9 - Home Assistant, then Matter Server (last, most risky)
 
-Docker keeps running until both are verified. HA first, Matter on a later day.
+Docker keeps running until both are verified. Order: 9.0 host networking ->
+9a HA -> 9b Matter (a later day) -> Docker removal.
 
-### 13.1 Home Assistant
+### 13.0 Diagnosed failure: Matter nodes "unavailable" after reboot (2026-09-30)
+Evidence (boot 2026-09-30 08:50 local):
+- `dhcpcd.service` runs `dhcpcd -q -B` and nothing implements
+  `network-online.target`, so "Network is Online" was reached at :06.2 -
+  before the NIC even had carrier (:09.1). The initramfs `netconf` cleanup
+  hook flushes and downs `eth0` before switch_root, so the real root always
+  starts link-down (~3 s renegotiation), widening the race.
+- Docker (`Wants/After=network-online.target`) started matter-server at
+  :09.5. Its init saw no DNS (`Temporary failure in name resolution`) and no
+  usable addresses (`Cannot assign requested address`); IPv6 global + default
+  route arrived at :11.4, IPv4 lease at :14.8. k3s crashed on the same race
+  (`no default routes found`) and was restarted by systemd.
+- The CHIP stack binds its mDNS/operational-discovery sockets once at start
+  and never re-enumerates: 3 h later `get_nodes` returned 12 nodes,
+  0 available. Port 5580 listening and HA connected with no errors, so a
+  `tcpSocket` probe would never detect it. `docker restart matter-server`
+  fixes it (12/12 available).
+
+Fix (layered):
+1. Root cause (9.0): make `network-online.target` real with
+   systemd-networkd + `systemd-networkd-wait-online` (both families routable).
+   Evaluated: dhcpcd@enp5s0 (`-w`, `waitip`) - single-interface mode exits at
+   timeout and `waitip 6` semantics vs link-local are undocumented;
+   NetworkManager - new package, desktop-oriented, needs CNI-interface
+   ignores. networkd ships with systemd and has explicit per-family
+   wait-online.
+2. Runtime blips: init container waits for host IPv4 default route + global
+   IPv6 before matter-server / HA start (hostNetwork sees host interfaces).
+3. Self-heal: semantic probe `apps/home/matter-server/health.py` (WebSocket
+   `get_nodes`; fail iff nodes > 0 and available == 0) as startupProbe
+   (5 min budget) and livenessProbe (5 min of zero reachable nodes).
+4. Visibility: PrometheusRule on matter-server restarts (> 2 in 1 h).
+
+### 13.0.1 Phase 9.0 - host networking: dhcpcd -> systemd-networkd + resolved
+Initramfs constraint (tinyssh remote LUKS unlock) - NEVER change in this
+phase: mkinitcpio `HOOKS` (`netconf tinyssh encryptssh`), the kernel
+`ip=:::::eth0:dhcp` parameter, no `.link` files, no mkinitcpio rebuild. The
+initramfs uses busybox + klibc `ipconfig`, independent of any real-root DHCP
+client.
+
+Files (`bootstrap/host/network/`):
+- `10-lan.network` -> `/etc/systemd/network/`: match MAC
+  `d4:5d:64:ba:44:dd`; `RequiredForOnline=routable`,
+  `RequiredFamilyForOnline=both`; `IPv6AcceptRA=yes` explicit (k3s enables
+  IPv6 forwarding); `UseDomains=yes`; `KeepConfiguration=dynamic-on-stop`;
+  dhcpcd's DHCP identity preserved (`DUIDType=link-layer-time`,
+  `DUIDRawData=00:01:2c:56:10:20:d4:5d:64:ba:44:dd`, `IAID=0x64ba44dd`) so
+  OPNsense keeps handing out 10.0.0.4 and `::2000`; `UseHostname=no`;
+  `Token=prefixstable` (RFC 7217, like `slaac private`).
+- `networkd-foreign.conf` -> `/etc/systemd/networkd.conf.d/10-foreign.conf`:
+  `ManageForeignRoutes=no`, `ManageForeignRoutingPolicyRules=no` (k3s/Docker).
+- `resolved-lan.conf` -> `/etc/systemd/resolved.conf.d/10-lan.conf`:
+  `MulticastDNS=no`, `LLMNR=no` (Matter/HA own 5353).
+- `networkd-revert.{sh,service,timer}`: safety net. Timer
+  `OnStartupSec=20min` (counts from systemd start = after the LUKS unlock),
+  enabled for the next boot only; reverts to dhcpcd and reboots unless
+  cancelled.
+- `verify-networkd.sh`: read-only post-reboot checks (no sudo).
+- `bootstrap/host/phase9-0-networkd.sh` (SUDO): precondition checks
+  (MAC, cmdline, HOOKS, DUID file, resolv.conf) -> install -> mask
+  `systemd-network-generator.service` (it would translate the
+  initramfs-only `ip=` into a second networkd config) -> enable
+  networkd/wait-online/resolved -> disable dhcpcd -> enable revert timer ->
+  `/etc/resolv.conf` -> `../run/systemd/resolve/stub-resolv.conf`
+  (original kept as `/etc/resolv.conf.dhcpcd`). Does not reboot itself.
+
+Steps: ### SUDO `sudo bash bootstrap/host/phase9-0-networkd.sh`; ### SUDO
+`sudo systemctl reboot`; unlock via tinyssh as usual; SSH in; ### SUDO
+`sudo systemctl disable --now networkd-revert.timer`; run
+`bash bootstrap/host/network/verify-networkd.sh` (all PASS).
+Rollback: `sudo /usr/local/sbin/networkd-revert.sh` (reverts + reboots;
+`--no-reboot` to skip). dhcpcd stays installed.
+
+### 13.1 Home Assistant (9a)
 1. `apps/home/home-assistant/deployment.yaml`:
    `ghcr.io/home-assistant/home-assistant:2025.12.4` (= `.HA_VERSION` from
    capture), `hostNetwork: true`, `dnsPolicy: ClusterFirstWithHostNet`,
    `replicas: 1`, `Recreate`, hostPath `/srv/appdata/home-assistant` ->
    `/config`, hostPath `/etc/localtime` ro, `privileged: false`, env `TZ`;
-   probe `httpGet / 8123` with `initialDelaySeconds: 60`. Optional Ingress
+   init container (pinned busybox) waiting for host IPv4 default route +
+   global IPv6 on `enp5s0`; probe `httpGet / 8123` with
+   `initialDelaySeconds: 60`. Optional Ingress
    `ha.lan` (Service with manual Endpoints to 10.0.0.4:8123) requires
    `http: use_x_forwarded_for: true, trusted_proxies: [10.42.0.0/16]` in
    `configuration.yaml`.
 2. ### SUDO: `cd /srv/homeassistant && docker compose stop homeassistant`;
    `rsync -aHAX /srv/homeassistant/config/ /srv/appdata/home-assistant/`;
-   `kubectl apply -k apps/home/home-assistant`.
+   `make apply-home`.
 3. Verify: `http://nas:8123` login; all integrations loaded (compare domain
    list from capture); Matter integration still connected to
    `ws://localhost:5580/ws` (matter-server still in Docker, host network);
@@ -806,27 +882,46 @@ Docker keeps running until both are verified. HA first, Matter on a later day.
 4. Rollback: `kubectl -n home scale deploy/home-assistant --replicas=0 && docker compose start homeassistant`.
    Leave the Docker container defined (stopped) for a week.
 
-### 13.2 Matter Server
+### 13.2 Matter Server (9b)
 1. `apps/home/matter-server/deployment.yaml`:
-   `ghcr.io/matter-js/python-matter-server:<exact version from capture>`,
+   `ghcr.io/matter-js/python-matter-server:8.1.2` (running version; confirm the
+   tag's digest equals the running `sha256:6827e352...aad3` before use; 8.1.2
+   is the final release - project archived),
    `hostNetwork: true`, `dnsPolicy: ClusterFirstWithHostNet`, args
    `--storage-path /data --paa-root-cert-dir /data/credentials`, hostPath
    `/srv/appdata/matter-server` -> `/data`, hostPath `/run/dbus` -> `/run/dbus`
    ro, `privileged: false` (AppArmor is not active on Arch; the compose
-   `apparmor:unconfined` needs no equivalent), probe `tcpSocket 5580`. Host
-   IPv6 stays enabled (it is).
+   `apparmor:unconfined` needs no equivalent). Same network-wait init
+   container as HA. `health.py` mounted from a ConfigMap at `/probe`:
+   startupProbe exec `python3 /probe/health.py` period 10 s,
+   failureThreshold 30; livenessProbe same command period 60 s, timeout 10 s,
+   failureThreshold 5. Known trade-off: if every device is genuinely offline
+   the pod restarts with backoff (max 5 min) - harmless, restart is the
+   recovery action. PrometheusRule `MatterServerRestarting`:
+   `increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2`.
 2. ### SUDO: `docker compose stop matter-server`;
    `rsync -aHAX /home/john/docker/matter-server/data/ /srv/appdata/matter-server/`
    (1.5 MB; the fabric - also copy to `/srv/Backups/migration-*/`); apply.
 3. Verify: HA Matter integration reconnects; every Matter device controllable;
-   commission one device if possible. If flaky for > 1 week, roll back to
-   Docker (ChatGPT session guidance: move Matter out rather than fight
-   IPv6/mDNS in Kubernetes).
+   commission one device if possible; `kubectl -n home exec deploy/matter-server
+   -- python3 /probe/health.py` shows all nodes; full reboot test (no manual
+   action, nodes available < 5 min); `kubectl delete pod` recovers; pull the
+   host ethernet ~30 s and confirm devices return. If flaky for > 1 week,
+   roll back to Docker (ChatGPT session guidance: move Matter out rather than
+   fight IPv6/mDNS in Kubernetes).
 4. After 2 weeks stable ### SUDO: `docker compose down` in `/srv/homeassistant`;
    `systemctl disable --now docker docker.socket`; archive
    `/home/qbittorrent /var/lib/{radarr,sonarr,jackett,jellyfin} /etc/jellyfin /srv/homeassistant /home/john/docker`
    into `/srv/Backups/migration-*/legacy-state.tgz`; optionally
    `pacman -Rns docker docker-compose jackett radarr sonarr-bin qbittorrent-nox jellyfin-server jellyfin-web jellyfin-ffmpeg`.
+   Keep `dhcpcd` installed (9.0 rollback path).
+
+### 13.3 Deferred - Phase 10: matterjs-server
+python-matter-server is archived (8.1.2 final); `matterjs-server` is the
+upstream drop-in replacement used by HA 2026.x. One-way data migration:
+back up the fabric first, pair with the HA upgrade that requires it, rewrite
+`health.py` for the Node-based image (WebSocket `get_nodes` API unchanged).
+Not combined with the k3s move.
 
 ---
 
@@ -860,7 +955,7 @@ Docker keeps running until both are verified. HA first, Matter on a later day.
 ## 16. Phase order and gating
 0 prep -> 1 k3s -> 2 qBittorrent (+torrent move) -> 3 Jellyfin -> 4 Prowlarr/
 Radarr/Sonarr/Recyclarr/Bazarr/Unpackerr -> 5 Seerr -> 6 Shoko -> 7 observability
--> 8 backups/updates/ops -> 9a Home Assistant -> 9b Matter Server -> Docker
-removal. Each phase's verification checklist must pass and be committed before
+-> 8 backups/updates/ops -> 9.0 host networking (networkd) -> 9a Home
+Assistant -> 9b Matter Server -> Docker removal -> (10 matterjs-server). Each phase's verification checklist must pass and be committed before
 the next begins. Phases 7 and 8 may run in parallel with 5-6 if desired; 9 is
 always last.

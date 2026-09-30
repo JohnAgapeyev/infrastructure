@@ -38,6 +38,18 @@ scaling to 0 quiets the noise and the logs stay available.
 on the RAID; only k3s runtime (SSD, `/var/lib/rancher/k3s`) would be lost
 on a root-disk failure.
 
+Host networking (Phase 9.0): the real root uses systemd-networkd
+(`/etc/systemd/network/10-lan.network`) + systemd-resolved; dhcpcd is
+installed but disabled. `network-online.target` waits until enp5s0 has
+routable IPv4 AND IPv6, so docker/k3s never start pre-network (the cause of
+the 2026-09-30 "all Matter devices unavailable" boot). The initramfs tinyssh
+unlock (`netconf` hook, kernel `ip=:::::eth0:dhcp`) is separate and must not
+be changed. Checks: `networkctl status enp5s0`, `resolvectl status`,
+`bash bootstrap/host/network/verify-networkd.sh`. Rollback:
+`sudo /usr/local/sbin/networkd-revert.sh` (reboots; `--no-reboot` to skip).
+Matter health at any time:
+`docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
+
 ## k3s vs Arch packages (never fight pacman with k3s)
 
 - k3s is ONE static binary at `/usr/local/bin/k3s` (get.k3s.io), embedding

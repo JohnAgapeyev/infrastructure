@@ -1,0 +1,47 @@
+# -> /etc/systemd/network/10-lan.network  (Phase 9.0; replaces dhcpcd.service)
+#
+# Real-root networking only. The initramfs (mkinitcpio netconf + tinyssh +
+# encryptssh, kernel `ip=:::::eth0:dhcp`) uses klibc ipconfig and flushes +
+# downs eth0 before switch_root, so it is independent of this file.
+# Matched by MAC (not name) so it never depends on the eth0 -> enp5s0 rename.
+[Match]
+MACAddress=d4:5d:64:ba:44:dd
+
+[Link]
+# network-online.target (and so docker/k3s) waits until BOTH families have a
+# routable address. This is the fix for matter-server starting with no network.
+RequiredForOnline=routable
+RequiredFamilyForOnline=both
+
+[Network]
+DHCP=yes
+# explicit: k3s sets net.ipv6.conf.all.forwarding=1, which would otherwise
+# disable RA handling by default
+IPv6AcceptRA=yes
+# dhcpcd wrote `domain lan`; keep the search domain
+UseDomains=yes
+# do not drop DHCP/SLAAC addresses when networkd is restarted (pacman -Syu)
+KeepConfiguration=dynamic-on-stop
+
+# Same DHCP identity dhcpcd used (/var/lib/dhcpcd/duid =
+# 00:01:00:01:2c:56:10:20:d4:5d:64:ba:44:dd, IAID 64:ba:44:dd), so OPNsense
+# keeps handing out 10.0.0.4 and 2001:569:77f3:3000::2000.
+# DUIDRawData is the DUID minus its 2-byte type (00:01 = link-layer-time).
+[DHCPv4]
+ClientIdentifier=duid
+DUIDType=link-layer-time
+DUIDRawData=00:01:2c:56:10:20:d4:5d:64:ba:44:dd
+# 0x64ba44dd
+IAID=1689928925
+UseHostname=no
+
+[DHCPv6]
+DUIDType=link-layer-time
+DUIDRawData=00:01:2c:56:10:20:d4:5d:64:ba:44:dd
+IAID=1689928925
+UseHostname=no
+
+[IPv6AcceptRA]
+# RFC 7217 stable-privacy SLAAC, like dhcpcd's `slaac private` (address value
+# differs from dhcpcd's; the DHCPv6 ::2000 address is the stable one)
+Token=prefixstable

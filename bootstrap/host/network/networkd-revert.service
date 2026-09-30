@@ -1,0 +1,7 @@
+# -> /etc/systemd/system/networkd-revert.service  (Phase 9.0 safety net)
+[Unit]
+Description=Phase 9.0 safety net: revert systemd-networkd to dhcpcd and reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/networkd-revert.sh
