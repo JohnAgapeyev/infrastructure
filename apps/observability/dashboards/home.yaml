@@ -1,7 +1,7 @@
 # Phase 9 home dashboard: Matter node availability (the one metric that
-# sees the 2026-09-30 failure mode), exporter/server health, pod restarts
-# and memory. The HA "up" stat and any HA sensor panels activate with the
-# 9c ServiceMonitor (exporters/home-assistant.yaml).
+# sees the 2026-09-30 failure mode), exporter/server health, pod restarts,
+# memory, HA entity availability / activity / RSS and light brightness
+# (9c /api/prometheus scrape; job label is "home-assistant").
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -286,7 +286,7 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "up{job=\"homeassistant\"}",
+              "expr": "up{job=\"home-assistant\"}",
               "legendFormat": "Home Assistant up",
               "refId": "A"
             }
@@ -406,7 +406,21 @@ data:
           "type": "timeseries"
         },
         {
-          "id": 7,
+          "id": 9,
+          "datasource": null,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 13
+          },
+          "collapsed": false,
+          "panels": [],
+          "title": "Home Assistant",
+          "type": "row"
+        },
+        {
+          "id": 10,
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
@@ -415,7 +429,7 @@ data:
             "h": 9,
             "w": 12,
             "x": 0,
-            "y": 13
+            "y": 14
           },
           "fieldConfig": {
             "defaults": {
@@ -457,7 +471,7 @@ data:
           "type": "timeseries"
         },
         {
-          "id": 8,
+          "id": 11,
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
@@ -466,7 +480,7 @@ data:
             "h": 9,
             "w": 12,
             "x": 12,
-            "y": 13
+            "y": 14
           },
           "fieldConfig": {
             "defaults": {
@@ -505,6 +519,210 @@ data:
             }
           ],
           "title": "Matter exporter scrape duration",
+          "type": "timeseries"
+        },
+        {
+          "id": 12,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 23
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "count(homeassistant_entity_available == 0)",
+              "legendFormat": "unavailable entities",
+              "refId": "A"
+            }
+          ],
+          "title": "HA entities unavailable",
+          "type": "timeseries"
+        },
+        {
+          "id": 13,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 23
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "rate(homeassistant_state_change_total[5m]) * 60",
+              "legendFormat": "changes/min",
+              "refId": "A"
+            }
+          ],
+          "title": "HA state changes / min",
+          "type": "timeseries"
+        },
+        {
+          "id": 14,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 23
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "process_resident_memory_bytes{job=\"home-assistant\"}",
+              "legendFormat": "HA RSS",
+              "refId": "A"
+            }
+          ],
+          "title": "HA process memory",
+          "type": "timeseries"
+        },
+        {
+          "id": 15,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 31
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "homeassistant_light_brightness_percent",
+              "legendFormat": "{{entity}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Light brightness %",
           "type": "timeseries"
         }
       ],

@@ -81,9 +81,8 @@ spec:
             summary: "matter-exporter cannot reach matter-server (10m)"
             description: "The WebSocket API at 10.0.0.4:5580 did not answer for 10 minutes. Check `kubectl -n home get pod -l app=matter-server`."
         - alert: HomeAssistantDown
-          # Activates when the 9c ServiceMonitor is wired in
-          # (exporters/home-assistant.yaml).
-          expr: up{job="homeassistant"} == 0
+          # job label is "home-assistant" (the ServiceMonitor name)
+          expr: up{job="home-assistant"} == 0
           for: 10m
           labels:
             severity: critical

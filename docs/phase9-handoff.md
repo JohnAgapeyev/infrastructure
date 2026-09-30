@@ -86,25 +86,23 @@ Key facts live in operations.md ("Home automation", "Reboot behaviour",
 the configMap volume ref is not rewritten) and the Prometheus rule reload
 lag (~1 min).
 
-## 9c (optional, staged): HA's own metrics via /api/prometheus
+## 9c (active): HA's own metrics via /api/prometheus
 
-Everything is prepared; activating needs two John steps + one agent
-wiring change:
+Activated 2026-09-30: token Secret `homeassistant-token` (ns home),
+`prometheus:` block in the migrated configuration.yaml, ServiceMonitor
+`home-assistant` (job label `home-assistant`) scraping
+http://10.0.0.4:8123/api/prometheus; target up; 116 entity series.
+Grafana "Home" dashboard has HA panels (entities unavailable, activity,
+RSS, light brightness). Two lessons recorded in operations.md quirks:
+the operator API group is monitoring.coreos.COM (not .io), and the
+operator needs a v1 Endpoints object - the home-assistant Service is now
+POD-SELECTOR based (hostNetwork pod IP = 10.0.0.4; endpoints.yaml was
+deleted; during a Docker rollback ha.lan stops routing - use
+http://nas:8123, it 400s anyway without trusted_proxies).
 
-1. HA UI: Profile -> Security -> Long-lived access tokens -> Create Token.
-2. `cp secrets/homeassistant.env.example secrets/homeassistant.env` and
-   paste the token (key `HASS_PROMETHEUS_TOKEN`).
-3. ### SUDO: `sudo bash bootstrap/host/phase9c-ha-metrics.sh` (appends the
-   `prometheus:` block to /srv/appdata/home-assistant/configuration.yaml,
-   idempotent).
-4. Agent: `kubectl -n home rollout restart deploy/home-assistant`; then
-   uncomment the TWO `9c` entries in
-   apps/observability/exporters/kustomization.yaml (resource
-   home-assistant.yaml + secretGenerator homeassistant-token) and apply
-   the exporters kustomization. The ServiceMonitor (ns home, Service
-   labels added 2026-09-30) scrapes /api/prometheus with the token;
-   HomeAssistantDown activates automatically. Grafana "Home" dashboard's
-   HA stat starts showing data; HA sensor panels can be added to
-   home.yaml afterwards from whatever the integration actually exports.
-DO NOT uncomment before secrets/homeassistant.env exists - the missing
-env file breaks the whole exporters kustomization build (hence staging).
+If the token ever needs rotating: create a new long-lived token in the HA
+UI, update secrets/homeassistant.env, `kubectl kustomize
+--load-restrictor=LoadRestrictionsNone apps/observability/exporters |
+kubectl apply -f -`, then `kubectl -n home delete secret
+homeassistant-token` is NOT needed (secretGenerator rewrites it; the
+ServiceMonitor picks it up after Prometheus reloads).

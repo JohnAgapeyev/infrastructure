@@ -1,10 +1,9 @@
-# 9c (staged, NOT yet listed in kustomization.yaml - see the comment
-# there for the activation steps): scrape HA's built-in prometheus
-# integration at /api/prometheus (needs a long-lived access token).
-# Targets the selectorless Service in apps/home/home-assistant/service.yaml
-# (static EndpointSlice 10.0.0.4:8123) - the same entry the ha.lan ingress
-# uses, so this survives rollbacks to the Docker container.
-apiVersion: monitoring.coreos.io/v1
+# 9c: scrape HA's built-in prometheus integration at /api/prometheus
+# (long-lived access token). Selects the (pod-selector) Service in
+# apps/home/home-assistant/service.yaml: the hostNetwork pod's IP is
+# 10.0.0.4, so the operator discovers endpoint 10.0.0.4:8123 - the same
+# address the ha.lan ingress uses.
+apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: home-assistant

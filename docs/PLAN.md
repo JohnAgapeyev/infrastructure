@@ -876,13 +876,16 @@ Rollback: `sudo /usr/local/sbin/networkd-revert.sh` (reverts + reboots;
    init container (pinned busybox) waiting for host IPv4 default route +
    global IPv6 on `enp5s0`; probe `httpGet / 8123` with
    `initialDelaySeconds: 60`. Ingress `ha.lan` (owner-confirmed 2026-09-30;
-   selectorless Service + static EndpointSlice to 10.0.0.4:8123 - keeps
-   working during a Docker rollback - v1 Endpoints API is deprecated in
-   k8s >= 1.33). Requires `http: use_x_forwarded_for: true,
+   pod-selector Service - the hostNetwork pod's IP IS 10.0.0.4 - +
+   Ingress; during a Docker rollback use `http://nas:8123`, ha.lan stops
+   routing). Requires `http: use_x_forwarded_for: true,
    trusted_proxies: [10.42.0.0/16]` in `configuration.yaml` - appended to
    the migrated copy by `phase9a-migrate-ha.sh` (without it HA answers
    `400 Bad Request` because Traefik sends X-Forwarded-For untrusted;
-   verified empirically pre-migration).
+   verified empirically pre-migration). (Originally a selectorless
+   Service + static EndpointSlice; switched to a pod selector in 9c
+   because the prometheus-operator only discovers endpoints via v1
+   Endpoints - see operations.md quirks.)
 2. ### SUDO: `cd /srv/homeassistant && docker compose stop homeassistant`;
    `rsync -aHAX /srv/homeassistant/config/ /srv/appdata/home-assistant/`;
    `make apply-home`.

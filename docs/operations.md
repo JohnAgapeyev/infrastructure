@@ -166,9 +166,17 @@ HA/matter together).
   `MatterNodesUnavailable` (available == 0 while up, 5m) is the ONLY
   alert that sees the 2026-09-30 failure mode (port listening, HA
   connected, no restarts, all nodes stuck unavailable).
+- Home Assistant metrics (9c, active 2026-09-30): HA's built-in
+  `prometheus:` integration scraped at /api/prometheus with a long-lived
+  token (Secret `homeassistant-token` in ns home); job label is
+  `home-assistant`. Exposes `homeassistant_entity_available` (116
+  entities), `homeassistant_state_change_total`,
+  `homeassistant_light_brightness_percent` (the lights),
+  `process_*` for HA RSS/CPU.
 - Grafana dashboard "Home (Home Assistant + Matter)" (uid `home-matter`,
   `apps/observability/dashboards/home.yaml`): node availability, exporter
-  health, home pod restarts/memory.
+  health, home pod restarts/memory, HA entities/activity/RSS, light
+  brightness.
 - Test anytime: `kubectl -n media scale deploy/radarr --replicas=0` for
   ~11 minutes -> MediaServiceDown + TargetDown fire in Alertmanager.
 
@@ -217,3 +225,15 @@ apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
   (`MATTER_EXPORTER_PORT=tcp://10.43.x.x:9566` for the matter-exporter
   Service). Name script env vars so they cannot collide
   (`MATTER_EXPORTER_LISTEN_PORT`).
+- The prometheus-operator API group is `monitoring.coreos.COM` - `.io`
+  fails with a confusing "no matches for kind ServiceMonitor" that looks
+  like a missing CRD. (kustomize + apply won't catch it; a server
+  dry-run will.)
+- This operator version discovers ServiceMonitor endpoints via v1
+  Endpoints only: a selectorless Service with just a hand-written
+  EndpointSlice produces NO scrape target (silently - the job appears in
+  the Prometheus config but never as a target). Use a pod selector; for
+  hostNetwork pods the pod IP is the node IP, so a selector Service gets
+  the right endpoints. This is why apps/home/home-assistant/service.yaml
+  uses a selector (during a Docker rollback its endpoints vanish - use
+  http://nas:8123 then; ha.lan 400s anyway without trusted_proxies).

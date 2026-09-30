@@ -3,16 +3,18 @@ kind: Service
 metadata:
   name: home-assistant
   namespace: home
-  # selectorless on purpose (PLAN 13.1); the label is for the 9c
-  # ServiceMonitor (exporters/home-assistant.yaml), which selects
-  # Services by their metadata labels.
   labels: { app: home-assistant }
 spec:
-  # NO selector on purpose (PLAN 13.1): HA is hostNetwork on 10.0.0.4, and
-  # manual Endpoints keep ha.lan pointing at 10.0.0.4:8123 even during a
-  # rollback to the Docker container (same host port). A selector-based
-  # Service would lose its endpoints the moment the Deployment is scaled
-  # to 0.
+  # pod selector (NOT selectorless): the pod is hostNetwork, so its
+  # podIP IS 10.0.0.4 - endpoints are identical to the previous static
+  # EndpointSlice, but they exist as v1 Endpoints + EndpointSlice, which
+  # the prometheus-operator's ServiceMonitor discovery requires (it reads
+  # v1 Endpoints; a selectorless Service with only a hand-written
+  # EndpointSlice produces NO scrape target - hit 2026-09-30).
+  # During a Docker rollback (deploy scaled to 0) endpoints vanish and
+  # ha.lan stops routing - use http://nas:8123 then (ha.lan 400s anyway:
+  # the Docker config has no trusted_proxies).
+  selector: { app: home-assistant }
   type: ClusterIP
   ports:
     - name: http
