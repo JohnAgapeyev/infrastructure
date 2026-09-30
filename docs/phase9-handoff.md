@@ -1,145 +1,123 @@
 # Phase 9 handoff (resume point)
 
-Written 2026-09-30 before the Phase 9.0 reboot. A fresh session should read
-this file first, then `docs/PLAN.md` section 13 (the authoritative Phase 9
-design), then `docs/operations.md`. Ground rules in PLAN.md section 0 still
-apply (no sudo for the agent; every privileged command is handed to John and
-the agent waits for confirmation; commit after each phase).
+Updated 2026-09-30, after Phase 9.0 was verified and 9a manifests were
+committed. A fresh session should read this file first, then `docs/PLAN.md`
+section 13 (the authoritative Phase 9 design), then `docs/operations.md`.
+Ground rules in PLAN.md section 0 still apply (no sudo for the agent; every
+privileged command is handed to John and the agent waits for confirmation;
+commit after each phase).
 
 ## Where things stand
 
-- Phases 0-8 are done and committed (see `git log`). Phase 9 is in progress.
-- Commit `2209eb4` ("phase 9.0 prep") added the 9.0 files, rewrote PLAN.md
-  section 13, and added a host-networking note to operations.md.
-- 9.0 has NOT been verified yet at the time of writing. John was about to:
-  1. `sudo bash bootstrap/host/phase9-0-networkd.sh`
-  2. `sudo systemctl reboot`, unlock LUKS via tinyssh as usual
-  3. SSH in, `sudo systemctl disable --now networkd-revert.timer`
-  4. `bash bootstrap/host/network/verify-networkd.sh` and paste the output
+- Phases 0-8 done and committed. Phase 9 in progress:
+- 9.0 (networkd) VERIFIED and committed (`cb5713b`): switch reboot was clean,
+  `verify-networkd.sh` 25/25 PASS (network-online 36.9 s, after DHCPv4
+  32.2 s + DHCPv6 35.4 s, before Docker 38.5 s / k3s 45.8 s; k3s 0 restarts;
+  matter-server 12/12 nodes, no manual restart). The revert timer is
+  disabled + inactive; the safety net never fired. dhcpcd stays installed as
+  the rollback path.
+- 9a manifests committed (`295fadc`): `apps/home/home-assistant/deployment.yaml`
+  (+ `apps/home/home-assistant/kustomization.yaml`, `apps/home/kustomization.yaml`,
+  dependabot home group now includes busybox). Server dry-run passed.
+- WAITING ON JOHN to run the state migration (see below). Nothing has been
+  applied to the cluster yet and the Docker homeassistant container is still
+  the live one.
 
 ## First thing to do when resuming
 
 Determine which state the host is in (all read-only, no sudo needed):
 
 ```
-systemctl is-active systemd-networkd systemd-resolved; systemctl is-enabled dhcpcd
-systemctl is-active networkd-revert.timer
-journalctl -t networkd-revert --no-pager      # present => the safety net fired
-bash bootstrap/host/network/verify-networkd.sh
+kubectl -n home get deploy,pod                # is the k8s HA up?
+docker inspect -f '{{.State.Status}}' homeassistant   # Docker HA stopped?
+ls -la /srv/appdata/home-assistant | head     # state copied?
+git log --oneline -5                          # which commits exist?
 ```
 
 | Observation | Meaning / next action |
 |---|---|
-| networkd active, dhcpcd disabled, verify `failures: 0` | 9.0 succeeded. Make sure the revert timer is inactive (if still armed, ask John to run `sudo systemctl disable --now networkd-revert.timer` IMMEDIATELY - it reboots the box 20 min after systemd start). Commit `phase 9.0: ...` with verify results summarized in operations.md, then start 9a. |
-| networkd active but some FAILs | Diagnose the specific check. Known soft spots: the boot-ordering check greps networkd's `enp5s0: DHCPv4 address` / `enp5s0: DHCPv6 address` log wording (if the wording differs, fix the script, not the system); pod DNS may need `kubectl -n kube-system rollout restart deploy/coredns`. |
-| IP is not 10.0.0.4 or no `::2000` | OPNsense did not accept the carried-over DUID/IAID. Compare `networkctl status enp5s0` DUID/Client ID with `00:01:00:01:2c:56:10:20:d4:5d:64:ba:44:dd` / IAID `0x64ba44dd`. Fix `bootstrap/host/network/10-lan.network`, or have John update the OPNsense static mapping. |
-| dhcpcd enabled again, `networkd-revert` in journal | The safety net fired (John could not reach the box or forgot to cancel). Ask John what happened, then inspect the failed boot: `journalctl -b -1 -u systemd-networkd -u systemd-networkd-wait-online -u systemd-resolved`. Config files were left in `/etc/systemd/network` etc. To retry: the switch script's precondition "/etc/resolv.conf is regular file" holds again after revert, but "/etc/systemd/network is empty" does NOT - John must `sudo rm /etc/systemd/network/10-lan.network` first (or adjust the script). |
-| Script never run (dhcpcd active, no networkd) | John has not done 9.0 yet; give him the steps above again. |
+| Docker HA running, no `/srv/appdata/home-assistant`, no deploy | John has not run the migration. Give him the SUDO block below again, then do the 9a apply + verify. |
+| Docker HA exited, `/srv/appdata/home-assistant` exists (12 MB), no deploy | Migration done, apply missing: run `make apply-home` (agent, no sudo), then verify per below. |
+| Deploy exists, pod Running/Ready | Apply done; run the verification list; if all good, commit `phase 9a: verified ...` (summarize in operations.md) and update this handoff. 9b is the next phase, on a later day. |
+| Deploy exists, pod not ready / crash-looping | `kubectl -n home describe pod -l app=home-assistant`, `kubectl -n home logs deploy/home-assistant --tail=100`. Rollback is always: `kubectl -n home scale deploy/home-assistant --replicas=0 && cd /srv/homeassistant && docker compose start homeassistant`. |
 
-## Key facts gathered this session (do not re-derive)
+## The 9a steps that remain
 
-Root cause of "all Matter lights unavailable after reboot":
-- `dhcpcd.service` = `dhcpcd -q -B`, nothing implements
-  `network-online.target` -> it is reached before the NIC has carrier.
-- initramfs `netconf` cleanup hook (`/usr/lib/initcpio/hooks/netconf`)
-  flushes + downs `eth0` before switch_root, so real root starts link-down
-  (~3 s renegotiation).
-- Docker started matter-server ~0.4 s before carrier; its startup logged
-  `Temporary failure in name resolution` and `Cannot assign requested address`;
-  CHIP binds mDNS once, so nodes never came back (12 nodes, 0 available
-  after 3 h). HA stayed connected, port 5580 listened -> tcp probes are
-  useless. `docker restart matter-server` fixed it (12/12).
-- `Network is unreachable` on mDNS advertise is NORMAL noise even on a healthy
-  start (no-carrier docker0/br-*); don't treat it as a failure signal.
-- k3s hit the same race (`no default routes found`, restarted by systemd).
+1. ### SUDO (user runs): `sudo bash bootstrap/host/phase9a-migrate-ha.sh`
+   (stops Docker homeassistant; rsyncs `/srv/homeassistant/config/` ->
+   `/srv/appdata/home-assistant/`; guard refuses to copy unless the
+   container is actually stopped; matter-server keeps running in Docker).
+2. Agent: `make apply-home` (no sudo). Watch
+   `kubectl -n home get pod -w` and `kubectl -n home logs deploy/home-assistant -f`.
+3. Verify (PLAN 13.1 step 3):
+   - `http://nas:8123` loads and login works (same credentials; the copy
+     includes `.storage` auth).
+   - All integrations loaded - compare the pre-migration config-entry list
+     (taken 2026-09-30, 17 entries):
+     `backup go2rtc google_translate group x6 linkplay matter met
+     mobile_app x2 radio_browser shopping_list sun`:
+     `python3 -c "import json; d=json.load(open('/srv/appdata/home-assistant/.storage/core.config_entries')); from collections import Counter; print(sorted(Counter(e['domain'] for e in d['data']['entries']).items()))"`
+   - Matter integration still connected to `ws://localhost:5580/ws`
+     (matter-server is still the Docker container, host network, untouched);
+     Matter devices controllable from HA.
+   - mDNS/SSDP discovery lists devices; mobile app reconnects; an automation
+     fires (John confirms).
+   - `bash bootstrap/host/network/verify-networkd.sh` still 25/25 (the pod
+     DNS checks now also exercise hostNetwork paths indirectly).
+4. On success: commit `phase 9a: verified ...` (summary in operations.md
+   endpoints table: Home Assistant stays `http://nas:8123`), leave the
+   Docker homeassistant container stopped for >= 1 week as rollback.
+5. Optional (deferred, only if John asks): Ingress `ha.lan` needs a Service
+   with manual Endpoints to 10.0.0.4:8123 AND `http: use_x_forwarded_for:
+   true, trusted_proxies: [10.42.0.0/16]` in HA `configuration.yaml`
+   (PLAN 13.1 step 1). Not built on purpose.
 
-Host / network:
-- NIC `enp5s0` (kernel name `eth0` in initramfs), MAC `d4:5d:64:ba:44:dd`,
-  r8169. IPv4 10.0.0.4/16 gw 10.0.0.2 (OPNsense, DNS, domain `lan`). IPv6
-  Telus prefix `2001:569:77f3:3000::/64`, DHCPv6 address `::2000/128`.
-- dhcpcd DUID `00:01:00:01:2c:56:10:20:d4:5d:64:ba:44:dd` (LLT), IAID
-  `64:ba:44:dd` = 1689928925. `/etc/dhcpcd.conf` had `slaac private`,
-  `noipv4ll`, `persistent`, `duid`.
-- Initramfs (must never be disturbed - tinyssh remote LUKS unlock):
-  mkinitcpio busybox, `HOOKS=(base udev autodetect keyboard keymap modconf
-  block mdadm_udev lvm2 netconf tinyssh encryptssh filesystems fsck)`, kernel
-  cmdline `ip=:::::eth0:dhcp cryptdevice=UUID=0e551b6e-...:RootVG`.
-  Do not switch to the systemd initramfs, do not change `ip=`, do not add
-  `.link` files, do not rebuild mkinitcpio for Phase 9.
-- `systemd-network-generator.service` (pulled in via networkd's `Also=`)
-  would translate the initramfs-only `ip=` into a networkd config -> the
-  switch script masks it; revert unmasks it.
-- avahi installed but disabled; 5353 is owned by HA + matter-server (host
-  network) -> resolved has `MulticastDNS=no`, `LLMNR=no`.
-- Arch default `/usr/lib/systemd/network/*.network` only match nspawn/VM
-  names (ve-*, vb-*, vz-*, vt-*, ns-*, host0) -> k3s `veth*`, `cni0`,
-  `flannel.1` and Docker `docker0`/`br-*` stay unmanaged.
-- systemd 262, dhcpcd 10.5.2, mkinitcpio 42.1. NetworkManager not installed
-  (evaluated and rejected; dhcpcd@ template also rejected - see PLAN 13.0).
+Rollback at any point: `kubectl -n home scale deploy/home-assistant
+--replicas=0` then `cd /srv/homeassistant && sudo docker compose start
+homeassistant` (Docker config dir was never modified - rsync copy only).
 
-Home Assistant / Matter (still in Docker, `/srv/homeassistant/docker-compose.yaml`,
-both `network_mode: host`, `restart: unless-stopped`, images on `:stable`):
-- HA `.HA_VERSION` = `2025.12.4`; config `/srv/homeassistant/config`.
-- matter-server: python-matter-server `8.1.2` (final release; project
-  archived, successor `matterjs-server`), CHIP SDK 2025.7.0, schema 11,
-  running image digest
-  `ghcr.io/matter-js/python-matter-server@sha256:6827e352011e2d8c2bde771e446fcf72acc49150ef66bad978816bac1762aad3`.
-  Data `/home/john/docker/matter-server/data` (fabric, irreplaceable), 12 nodes.
-- `john` can run `docker` without sudo.
-- Health check: `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`
-  (exit 0 = no nodes or >= 1 available; prints `nodes=N available=M`).
+## Key facts (do not re-derive)
 
-## Files added for Phase 9 so far
+- Docker `homeassistant` container: image `ghcr.io/home-assistant/...:stable`
+  (local image == 2025.12.4, `.HA_VERSION` confirms), entrypoint `/init`
+  (s6), binds ONLY `/srv/homeassistant/config:/config` and
+  `/etc/localtime:ro` (no `/run/dbus`, no devices), `network_mode: host`,
+  currently ~505 MiB RSS -> Deployment limits are memory 2Gi.
+- `busybox:1.37.0` validated on-node (k3s containerd pulled it; the exact
+  init-container `ip -4 route show default` / `ip -6 addr show dev enp5s0
+  scope global` busybox syntax was tested in a hostNetwork throwaway pod).
+- coredns Corefile has `forward . /etc/resolv.conf` and the node resolv.conf
+  is the resolved stub (127.0.0.53) - this WORKS because kubelet translates
+  `Default`-dnsPolicy pods' resolv.conf to the real upstreams (verified: a
+  Default-dnsPolicy pod sees `nameserver 10.0.0.2`). coredns restarting is
+  not a hazard.
+- Root cause of the Matter boot failure, host/network facts, initramfs
+  constraints (never touch `ip=`, HOOKS, `.link` files, mkinitcpio): all
+  recorded in PLAN.md 13.0 and operations.md "Reboot behaviour" - read those
+  instead of re-deriving.
+- HA/matter containers: `network_mode: host`, `restart: unless-stopped`;
+  matter-server: python-matter-server 8.1.2 (final; project archived,
+  successor matterjs-server), running digest
+  `ghcr.io/matter-js/python-matter-server@sha256:6827e352011e2d8c2bde771e446fcf72acc49150ef66bad978816bac1762aad3`,
+  data `/home/john/docker/matter-server/data` (fabric, irreplaceable),
+  12 nodes. `john` can run `docker` without sudo.
+- Matter health check (Docker phase):
+  `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
 
-- `bootstrap/host/phase9-0-networkd.sh` - SUDO switch script (preconditions,
-  install, mask generator, enable networkd/wait-online/resolved, disable
-  dhcpcd, arm revert timer, resolv.conf -> stub; backup `/etc/resolv.conf.dhcpcd`).
-- `bootstrap/host/network/10-lan.network`, `networkd-foreign.conf`,
-  `resolved-lan.conf` - installed configs (destinations in file headers).
-- `bootstrap/host/network/networkd-revert.{sh,service,timer}` - safety net;
-  script installed to `/usr/local/sbin/networkd-revert.sh`.
-- `bootstrap/host/network/verify-networkd.sh` - read-only post-reboot checks.
-- `apps/home/matter-server/health.py` - semantic Matter health probe.
-- NOTE: `apps/home/` has no `kustomization.yaml` yet; `make apply-home`
-  will fail until 9a adds `apps/home/kustomization.yaml` (+ home-assistant).
+## 9b (later day) - summary
 
-## Remaining work after 9.0 is verified
-
-Follow PLAN.md sections 13.1-13.3. Summary of what to build:
-
-9a Home Assistant (`apps/home/home-assistant/`, plus `apps/home/kustomization.yaml`):
-- Deployment ns `home`, image `ghcr.io/home-assistant/home-assistant:2025.12.4`,
-  `hostNetwork: true`, `dnsPolicy: ClusterFirstWithHostNet`, replicas 1,
-  Recreate, hostPath `/srv/appdata/home-assistant` -> `/config`
-  (directory must be created by John: `mkdir` + ownership root, since HA runs
-  as root like in Docker), `/etc/localtime` ro, env TZ America/Vancouver,
-  `privileged: false`.
-- Init container (pinned busybox, e.g. `busybox:1.37.0` - verify tag exists)
-  looping until `ip -4 route show default` and
-  `ip -6 addr show dev enp5s0 scope global` are non-empty.
-- Probe `httpGet / 8123`, `initialDelaySeconds: 60`.
-- Update `.github/dependabot.yml` `home` group if needed; follow the style
-  of `apps/media/jellyfin/`.
-- SUDO for John: `cd /srv/homeassistant && docker compose stop homeassistant`;
-  `rsync -aHAX /srv/homeassistant/config/ /srv/appdata/home-assistant/`;
-  then agent runs `make apply-home`. Verify per PLAN 13.1 step 3; the Matter
-  integration must still reach `ws://localhost:5580/ws` (Docker matter-server).
-
-9b Matter Server (a later day, `apps/home/matter-server/`):
-- Pin `8.1.2` after confirming the tag's digest equals the running digest
-  above (e.g. `docker buildx imagetools inspect` or registry API).
-- Same init container; ConfigMap from `health.py` (kustomize
-  `configMapGenerator`) mounted at `/probe`; startupProbe exec
-  `python3 /probe/health.py` period 10 s failureThreshold 30; livenessProbe
-  period 60 s timeout 10 s failureThreshold 5.
-- PrometheusRule `MatterServerRestarting` in
-  `apps/observability/rules/prometheusrule.yaml`:
-  `increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2`.
-- SUDO data move per PLAN 13.2 step 2 (+ extra fabric copy to
-  `/srv/Backups/migration-*/`). Verification includes a full reboot test,
-  `kubectl delete pod`, and a ~30 s ethernet pull.
-
-Then Docker removal after 2 weeks stable (PLAN 13.2 step 4; keep dhcpcd
-installed as 9.0 rollback), and deferred Phase 10 (matterjs-server).
+Follow PLAN.md 13.2. Pin `8.1.2` only after confirming the tag digest equals
+the running digest (`docker buildx imagetools inspect` or registry API).
+Same wait-for-network init container; `health.py` via kustomize
+`configMapGenerator` mounted at `/probe`; startupProbe exec `python3
+/probe/health.py` (period 10 s, failureThreshold 30); livenessProbe period
+60 s, timeout 10 s, failureThreshold 5; hostPath `/run/dbus` ro;
+PrometheusRule `MatterServerRestarting`
+(`increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2`)
+in `apps/observability/rules/prometheusrule.yaml`. SUDO data move per PLAN
+13.2 step 2 (+ extra fabric copy to `/srv/Backups/migration-*/`).
+Verification includes full reboot test, `kubectl delete pod`, ~30 s ethernet
+pull. Then Docker removal after 2 weeks stable (PLAN 13.2 step 4; keep
+dhcpcd installed), and deferred Phase 10 (matterjs-server).
 
 Delete or trim this handoff file once Phase 9 is complete.
