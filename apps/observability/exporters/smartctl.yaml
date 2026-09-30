@@ -24,6 +24,9 @@ spec:
               containerPort: 9633
           securityContext:
             privileged: true
+            # smartctl requires root for ATA passthrough (upstream chart runs
+            # as root; image defaults to nobody -> all device reads fail)
+            runAsUser: 0
           volumeMounts:
             - { name: dev, mountPath: /dev }
       volumes:

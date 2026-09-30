@@ -9,16 +9,6 @@ metadata:
 data:
   smartctl.json: |
     {
-     "__inputs": [
-      {
-       "name": "DS_VICTORIAMETRICS-METRICS-DATASOURCE",
-       "label": "victoriametrics-metrics-datasource",
-       "description": "",
-       "type": "datasource",
-       "pluginId": "victoriametrics-metrics-datasource",
-       "pluginName": "VictoriaMetrics"
-      }
-     ],
      "__elements": {},
      "__requires": [
       {
@@ -53,9 +43,9 @@ data:
       },
       {
        "type": "datasource",
-       "id": "victoriametrics-metrics-datasource",
-       "name": "VictoriaMetrics",
-       "version": "0.19.3"
+       "id": "prometheus",
+       "name": "Prometheus",
+       "version": "1.0.0"
       }
      ],
      "annotations": {
@@ -99,7 +89,7 @@ data:
        },
        {
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
+         "type": "prometheus",
          "uid": "${datasource}"
         },
         "enable": false,
@@ -112,11 +102,11 @@ data:
        },
        {
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
-         "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+         "type": "prometheus",
+         "uid": "${datasource}"
         },
         "enable": true,
-        "expr": "sum(smartctl_version{job=~\"$job\", instance=~\"$instance\"})\r\nby(smartctl_version, svn_revision, build_info) \r\n    unless \r\n(\r\n    sum(\r\n        # If there are NaNs we get a version change, fix this by looking at the most recent one if there is nan.\r\n        # Also set the step to min $__interval, in metrisql this is 1i (to get an instant anotation and not range anotation)\r\n        keep_last_value(\r\n        #last_over_time(\r\n            smartctl_version{job=~\"$job\", instance=~\"$instance\"} offset 1i\r\n        )\r\n    ) \r\n    by(smartctl_version, svn_revision, build_info)\r\n)\r\n",
+        "expr": "sum(smartctl_version{job=~\"$job\", instance=~\"$instance\"})\r\nby(smartctl_version, svn_revision, build_info) \r\n    unless \r\n(\r\n    sum(\r\n        last_over_time(\r\n            smartctl_version{job=~\"$job\", instance=~\"$instance\"}[10m] offset 30s\r\n        )\r\n    ) \r\n    by(smartctl_version, svn_revision, build_info)\r\n)\r\n",
         "hide": true,
         "iconColor": "purple",
         "name": "smartctl version",
@@ -147,8 +137,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "Currently Connected Drives",
        "fieldConfig": {
@@ -554,7 +544,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -568,8 +558,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": true,
@@ -583,7 +573,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -598,8 +588,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": true,
@@ -613,7 +603,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -628,8 +618,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": true,
@@ -643,7 +633,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -658,8 +648,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": true,
@@ -673,7 +663,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -785,8 +775,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "Device power on seconds\n\nNOTE: some samsung ssds will report 1/8th or 1/3th of an hour, example Samsung SSD 960 EVO is 1/3th and the 970 there are reports it's 1/8th ",
        "fieldConfig": {
@@ -844,7 +834,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -862,8 +852,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": " Device temperature celsius",
        "fieldConfig": {
@@ -950,7 +940,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -969,8 +959,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "Currently connected devices (received a metric in the last 5 minutes)\n\nAlso other devices that existed for this time range (more info on the panels below)",
        "fieldConfig": {
@@ -1372,7 +1362,7 @@ data:
          "160": "\"",
          "161": "}",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -1384,8 +1374,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -1517,7 +1507,7 @@ data:
       {
        "datasource": {
         "name": "${datasource}",
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -1571,8 +1561,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -1590,7 +1580,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "",
@@ -1652,8 +1642,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -1666,7 +1656,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -1684,8 +1674,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "SMART overall-health self-assessment test result",
        "fieldConfig": {
@@ -1759,7 +1749,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -1777,8 +1767,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "Can help detect if there where some physical disk changes",
        "fieldConfig": {
@@ -1839,7 +1829,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -1858,8 +1848,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -1911,7 +1901,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -1929,8 +1919,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -2312,7 +2302,7 @@ data:
          "323": "e",
          "324": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -2327,8 +2317,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "",
        "fieldConfig": {
@@ -2591,7 +2581,7 @@ data:
          "207": "\"",
          "208": "}",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -2608,8 +2598,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -2660,7 +2650,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -2678,8 +2668,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -2729,7 +2719,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -2747,8 +2737,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -2802,7 +2792,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -2819,8 +2809,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -3202,7 +3192,7 @@ data:
          "323": "e",
          "324": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -3219,8 +3209,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -3506,7 +3496,7 @@ data:
          "230": "e",
          "231": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -3521,8 +3511,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -3687,7 +3677,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -3905,8 +3895,8 @@ data:
          "204": "e",
          "205": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\n  smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\n    * on(device,instance) group_right(model_name,serial_number)\n  smartctl_device_bytes_read{instance=~\"$instance\"}\n) by(serial_number)",
@@ -4769,11 +4759,11 @@ data:
          "850": "\n",
          "851": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
-         "expr": "WITH (\r\n  written_bytes_per_device = (\r\n      smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n        * on(device,instance) group_right(model_name,serial_number)\r\n        smartctl_device_bytes_written{instance=~\"$instance\"}\r\n  ) > 0,\r\n  written_bytes_per_serial = max(written_bytes_per_device) without(device),\r\n  written_gigabytes = ((written_bytes_per_serial / 1024) / 1024) / 1024,\r\n  increase_day = increase(written_gigabytes[1d:30m]), # In big steps, smart is not that fast to update.\r\n)\r\navg_over_time( increase_day[$__range:30m] ) # yearly average of gigabytes/day written\r\n\r\n# Use this if you don't have victoriametrics: without with:\r\n# avg_over_time(increase((((max((smartctl_device * on(device,instance) group_right(model_name,serial_number) smartctl_device_bytes_written) > 0) without(device) / 1024) / 1024) / 1024)[1d:30m])[$__range:30m])",
+         "expr": "avg_over_time(\r\n  increase(\r\n    (\r\n      max(\r\n        (\r\n          smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n            * on(device,instance) group_right(model_name,serial_number)\r\n          smartctl_device_bytes_written{instance=~\"$instance\"}\r\n        ) > 0\r\n      ) without(device) / 1024 / 1024 / 1024\r\n    )[1d:30m]\r\n  )[$__range:30m]\r\n)",
          "legendFormat": "Average of Daily Writes",
          "range": true,
          "refId": "C"
@@ -5632,11 +5622,11 @@ data:
          "850": "\n",
          "851": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
-         "expr": "WITH (\r\n  written_bytes_per_device = (\r\n      smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n        * on(device,instance) group_right(model_name,serial_number)\r\n        smartctl_device_bytes_written{instance=~\"$instance\"}\r\n  ) > 0,\r\n  written_bytes_per_serial = max(written_bytes_per_device) without(device),\r\n  written_gigabytes = ((written_bytes_per_serial / 1024) / 1024) / 1024,\r\n  increase_day = increase(written_gigabytes[1d:30m]), # In big steps, smart is not that fast to update.\r\n)\r\nincrease_day\r\n\r\n# Use this if you don't have victoriametrics: without with:\r\n# avg_over_time(increase((((max((smartctl_device * on(device,instance) group_right(model_name,serial_number) smartctl_device_bytes_written) > 0) without(device) / 1024) / 1024) / 1024)[1d:30m])[1y:30m])",
+         "expr": "avg_over_time(\r\n  increase(\r\n    (\r\n      max(\r\n        (\r\n          smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n            * on(device,instance) group_right(model_name,serial_number)\r\n          smartctl_device_bytes_written{instance=~\"$instance\"}\r\n        ) > 0\r\n      ) without(device) / 1024 / 1024 / 1024\r\n    )[1d:30m]\r\n  )[$__range:30m]\r\n)",
          "format": "time_series",
          "hide": false,
          "legendFormat": "Writes/Day",
@@ -5650,7 +5640,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "Available Spare: Normalized percentage (0 to 100%) of the remaining spare capacity available\n\nSpare Threshold: When the Available Spare falls below the threshold indicated in this field, an asynchronous event completion may occur. The value is indicated as a normalized percentage (0 to 100%)\n\n\n",
@@ -5974,8 +5964,8 @@ data:
          "209": "e",
          "210": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n    * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_available_spare{instance=~\"$instance\"}\r\n) by(serial_number)",
@@ -6207,7 +6197,7 @@ data:
          "219": "e",
          "220": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -6223,8 +6213,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "Percentage Used (PUSED): Contains a vendor specific estimate of the percentage of NVM subsystem\nlife used based on the actual usage and the manufacturer\u2019s prediction of NVM life.  \n\nA value of 100 indicates that the estimated endurance of the NVM in the NVM subsystem has been consumed, but may not indicate an NVM subsystem failure. The value is allowed to exceed 100. Percentages greater than 254 shall be represented as 255. This value shall be updated once per power-on hour (when the controller is not in a sleep state).   \n\nRefer to the JEDEC JESD218B-02 standard for SSD device life and endurance measurement\ntechniques.",
        "fieldConfig": {
@@ -6340,7 +6330,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -6356,8 +6346,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "**Critical Warning**: This field indicates critical warnings for the state of the controller.  \nEach bit corresponds to a critical warning type; multiple bits may be set. If a bit is cleared to \u20180\u2019, then that critical warning does not apply.  \nCritical warnings may result in an asynchronous event notification to the host.  \nBits in this field represent the state at the time the Get Log Page command is processed and may\nnot reflect the state at the time a related asynchronous event notification, if any, occurs or occurred.  \nhttps://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-Revision-2.1-2024.08.05-Ratified.pdf#%5B%7B%22num%22%3A871%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C75%2C627%2C0%5D\n\n**Bit Definition**\n\n| Bits | Description\n|------------|--|\n|7:6| Reserved |\n|5| Persistent Memory Region Read-Only (PMRRO): If this bit is set to \u20181\u2019, then the Persistent Memory Region has become read-only or unreliable (refer to section 8.2.4). https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-Revision-2.1-2024.08.05-Ratified.pdf#%5B%7B%22num%22%3A1486%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C69%2C250%2C0%5D |\n|4|  Volatile Memory Backup Failed (VMBF): If this bit is set to \u20181\u2019, then the volatile memory backup device has failed. This field is only valid if the controller has a volatile memory backup solution.|\n|3| All Media Read-Only (AMRO): If this bit is set to \u20181\u2019, then all of the media has been placed in read only mode. The controller shall not set this bit to '1' if the read-only condition on the media is a result of a change in the write protection state of a namespace (refer to section 8.1.16.1). https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-Revision-2.1-2024.08.05-Ratified.pdf#%5B%7B%22num%22%3A1387%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C69%2C193%2C0%5D |\n|2| NVM Subsystem Degraded Reliability (NDR): If this bit is set to \u20181\u2019, then the NVM subsystem reliability has been degraded due to significant media related errors or any internal error that degrades NVM subsystem reliability. |\n|1| Temperature Threshold Condition (TTC): If this bit is set to \u20181\u2019, then a temperature is:<br> a) greater than or equal to an over temperature threshold; or <br> b) less than or equal to an under temperature threshold,<br> (refer to section 5.1.25.1.3). https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-Revision-2.1-2024.08.05-Ratified.pdf#%5B%7B%22num%22%3A1076%2C%22gen%22%3A0%7D%2C%7B%22name%22%3A%22XYZ%22%7D%2C69%2C193%2C0%5D |\n|0| Available Spare Capacity Below Threshold (ASCBT): If this bit is set to \u20181\u2019, then the available spare capacity has fallen below the threshold. |\n\n\n",
        "fieldConfig": {
@@ -6681,7 +6671,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -6939,8 +6929,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\r\n  max(\r\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n      * on(device,instance) group_right(model_name,serial_number)\r\n    smartctl_device_critical_warning{instance=~\"$instance\"}\r\n  ) by (serial_number),\r\n  0x02 # Bit 1 = 0000 0010\r\n)",
@@ -7197,7 +7187,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -7456,8 +7446,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n    smartctl_device_critical_warning{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x08 # Bit 3 = 0000 1000\n)",
@@ -7715,7 +7705,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -7974,8 +7964,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n    smartctl_device_critical_warning{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x20 # BIT 5 = 0010 0000\n)",
@@ -8233,7 +8223,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -8250,8 +8240,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "",
        "fieldConfig": {
@@ -8550,7 +8540,7 @@ data:
          "209": "r",
          "210": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -8566,8 +8556,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "**Number of Error Information Log Entries** (NEILE): Contains the number of Error Information Log Entries over the life of the controller.",
        "fieldConfig": {
@@ -8651,7 +8641,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -8667,8 +8657,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "Media and Data Integrity Errors (MDIE): Contains the number of occurrences where the controller detected an unrecovered data integrity error. \n\nErrors such as uncorrectable ECC, CRC checksum failure, or LBA tag mismatch are included in this field. Errors introduced as a result of a Write Uncorrectable command (refer to the NVM Command Set Specification) may or may not be included in this field.",
        "fieldConfig": {
@@ -8752,7 +8742,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -8768,8 +8758,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "SMART overall-health self-assessment test result.\n\n",
        "fieldConfig": {
@@ -8894,7 +8884,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -8905,8 +8895,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n  * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\r\n) without(device)",
@@ -8923,7 +8913,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "The return values of smartctl are defined by a bitmask.  \nIf all is well with the disk, the return value (exit status) of smartctl is 0 (all bits turned off). If a problem occurs, or an error, potential error, or fault is detected, then a non-zero status is returned.  \nIn this case, the eight different bits in the return value have the following meanings for ATA disks; some of these values may also be returned for SCSI disks.\n\nBit 0:  \nCommand line did not parse.\n\nBit 1:  \nDevice open failed, device did not return an IDENTIFY DEVICE structure, or device is in a low-power mode (see '-n' option above).\n\nBit 2:  \nSome SMART or other ATA command to the disk failed, or there was a checksum error in a SMART data structure (see '-b' option above).\n\nBit 3:  \nSMART status check returned \"DISK FAILING\".\n\nBit 4:  \nWe found prefail Attributes <= threshold.\n\nBit 5:  \nSMART status check returned \"DISK OK\" but we found that some (usage or prefail) Attributes have been <= threshold at some time in the past.\n\nBit 6:  \nThe device error log contains records of errors.\n\nBit 7:  \nThe device self-test log contains records of errors. [ATA only] Failed self-tests outdated by a newer successful extended self-test are ignored. ",
@@ -9248,8 +9238,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\r\n  max(\r\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\r\n      * on(device,instance) group_right(model_name,serial_number)\r\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\r\n  ) by (serial_number),\r\n  0x01 # Bit 0 = 0000 0001\r\n) ",
@@ -9506,7 +9496,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -9764,8 +9754,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x04 # Bit 2 = 0000 0100\n)",
@@ -10023,7 +10013,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -10282,8 +10272,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x10 # Bit 4 = 0001 0000\n)",
@@ -10541,7 +10531,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -10800,8 +10790,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$nvme_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x40 # BIT 6 = 0100 0000\n)",
@@ -11059,7 +11049,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -11076,8 +11066,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "NOT WORKING FOR NVME FOR NOW",
        "fieldConfig": {
@@ -11668,7 +11658,7 @@ data:
          "505": "r",
          "506": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -11698,8 +11688,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "fieldConfig": {
         "defaults": {
@@ -11751,7 +11741,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -11769,8 +11759,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "",
        "fieldConfig": {
@@ -11824,7 +11814,7 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -11839,8 +11829,8 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -11858,7 +11848,7 @@ data:
       {
        "datasource": {
         "name": "${datasource}",
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "SMART overall-health self-assessment test result",
@@ -11933,8 +11923,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -11952,7 +11942,7 @@ data:
       {
        "datasource": {
         "name": "${datasource}",
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -12012,8 +12002,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -12032,7 +12022,7 @@ data:
       {
        "datasource": {
         "name": "${datasource}",
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -12085,8 +12075,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -12104,7 +12094,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -12487,8 +12477,8 @@ data:
          "323": "e",
          "324": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -12505,7 +12495,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "Protocol",
@@ -12769,8 +12759,8 @@ data:
          "207": "\"",
          "208": "}",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -12787,7 +12777,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -13051,8 +13041,8 @@ data:
          "207": "\"",
          "208": "}",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n  * on(device,instance) group_right(model_name,serial_number)\n      smartctl_device_power_cycle_count{instance=~\"$instance\"} > 0) by (serial_number)",
@@ -13067,7 +13057,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -13333,8 +13323,8 @@ data:
          "208": "e",
          "209": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n    * on(device,instance) group_right(model_name,serial_number)\n  smartctl_device_rotation_rate{instance=~\"$instance\"}\n) by(serial_number) default \"SSD\"",
@@ -13348,7 +13338,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -13611,8 +13601,8 @@ data:
          "207": "\"",
          "208": "}",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -13629,7 +13619,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -13893,8 +13883,8 @@ data:
          "207": "\"",
          "208": "}",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n  * on(device,instance) group_right(model_name,serial_number)\n  smartctl_device_block_size{instance=~\"$instance\"} > 0\n) by (serial_number, blocks_type)",
@@ -13908,7 +13898,7 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -13963,8 +13953,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -13981,7 +13971,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -14364,8 +14354,8 @@ data:
          "323": "e",
          "324": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
@@ -14382,7 +14372,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "##### SMART 169: Remaining Lifetime Percentage (Western Digital)\n\nThis attribute measures the approximate life left from a combination of program-erase cycles and available reserve blocks of the device. A brand new SSD will report a value of \u201c100\u201d for the Normalized value and decrease down to \u201c0\u201d as the drive is used.\n\n##### SMART 202: Percentage of Lifetime Remaining (Crucial)\n\nRead [crucial.com SMART Data](https://www.crucial.com/support/articles-faq-ssd/ssds-and-smart-data)\n\nThis can mean Lifetime Remaining or Lifetime Used, most of the time the value of the smart data will be **Remaining life**, and the raw value, used life.\n\n##### SMART 231: Life Left (Seagate)\n\nThis attribute indicates the approximate SSD life left, in terms of program/erase cycles or available reserved blocks. A brand new SSD has a normalized value of \u201c100\u201d and decreases from there with a threshold value at \u201c10\u201d indicating a need for replacement. A value of \u201c0\u201d may mean that the drive is operating in read-only mode.",
@@ -14906,8 +14896,8 @@ data:
          "455": "\n",
          "456": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "# Western Digital = 169\n# Seagate = 231\n# Crucial = 202\nmin\n(\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n    * on(device,instance) group_right(serial_number)\n  smartctl_device_attribute{\n    instance=~\"$instance\",attribute_id=~\"169|231|202\",attribute_value_type=\"value\"\n  }\n)",
@@ -14922,7 +14912,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "fieldConfig": {
@@ -15453,11 +15443,11 @@ data:
          "477": "\n",
          "478": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
-         "expr": "# SMART 241: LBAs Written = This will return data if it's not a Crucial SATA SSD\n# SMART 246 = This will return data if it's a Crucial SATA SSDs\nWITH (\n  common_filters = {serial_number=\"$ata_serial\",instance=~\"$instance\"},\n)\n(\n  smartctl_device{common_filters}\n    * on(device,instance) group_right(serial_number)\n  smartctl_device_attribute{\n    instance=~\"$instance\",attribute_id=~\"241|246\",attribute_value_type=\"raw\"\n  }\n)\n  * on(serial_number)\n(\n  smartctl_device{common_filters}\n    * on(device,instance) group_right(model_name,serial_number)\n  smartctl_device_block_size{instance=~\"$instance\",blocks_type=\"logical\"}\n)",
+         "expr": "(\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n    * on(device,instance) group_right(serial_number)\n  smartctl_device_attribute{\n    instance=~\"$instance\",attribute_id=~\"241|246\",attribute_value_type=\"raw\"\n  }\n)\n* on(serial_number)\n(\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n    * on(device,instance) group_right(model_name,serial_number)\n  smartctl_device_block_size{instance=~\"$instance\",blocks_type=\"logical\"\n}\n)",
          "format": "time_series",
          "legendFormat": "Written",
          "range": true,
@@ -15469,7 +15459,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "May be wrong for ATAs (excessive numbers)",
@@ -15984,8 +15974,8 @@ data:
          "461": "\n",
          "462": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "# Crucial SATA SSD = 251\r\n# Normal ID = 242\r\n(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n    * on(device,instance) group_right(serial_number)\r\n  smartctl_device_attribute{\r\n    instance=~\"$instance\",attribute_id=~\"242|251\",attribute_value_type=\"raw\"\r\n  }\r\n)\r\n  * on(serial_number)\r\n(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n    * on(device,instance) group_right(serial_number)\r\n  smartctl_device_block_size{instance=~\"$instance\",blocks_type=\"logical\"}\r\n)",
@@ -16000,7 +15990,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "Based on https://www.backblaze.com/blog/hard-drive-smart-stats/\n\nIf you see some increasing RED colors here,danger. It may still last a long time depending if Power On Hours < 4 years.  \nIf the colors are not red, beware.\n\nThese are RAW values.",
@@ -16424,8 +16414,8 @@ data:
          "256": "e",
          "257": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n    * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_attribute{\r\n    instance=~\"$instance\",attribute_id=\"5\",attribute_value_type=\"raw\"\r\n  }\r\n) without(device)",
@@ -16695,7 +16685,7 @@ data:
          "258": "e",
          "259": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -16966,8 +16956,8 @@ data:
          "258": "e",
          "259": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n    * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_attribute{\r\n    instance=~\"$instance\",attribute_id=\"188\",attribute_value_type=\"raw\"\r\n  }\r\n) without(device)",
@@ -17237,7 +17227,7 @@ data:
          "258": "e",
          "259": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -17508,8 +17498,8 @@ data:
          "258": "e",
          "259": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n    * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_attribute{\r\n    instance=~\"$instance\",attribute_id=\"198\",attribute_value_type=\"raw\"\r\n  }\r\n) without(device)",
@@ -17525,7 +17515,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "Execute: `smartctl.exe --log=error --log=selftest {device}` (as admin)    \nOn the instance console to see more details.",
@@ -17654,8 +17644,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n  * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_error_log_count{instance=~\"$instance\"}\r\n) without(device)",
@@ -17665,7 +17655,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -17899,8 +17889,8 @@ data:
          "220": "e",
          "221": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n    * on(device,instance) group_right(model_name,serial_number)\n  smartctl_device_self_test_log_error_count{instance=~\"$instance\"}\n) without(device)",
@@ -17916,7 +17906,7 @@ data:
       {
        "datasource": {
         "name": "${datasource}",
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "Short flags:  \n ||||||_ K auto-keep   \n |||||__ C event count  \n ||||___ R error rate  \n |||____ S speed/performance  \n ||_____ O updated online  \n |______ P prefailure warning  \n\nWikipedia:  \n[Wikipedia S.M.A.R.T Attributes](https://en.m.wikipedia.org/wiki/Self-Monitoring,_Analysis_and_Reporting_Technology#Known_ATA_S.M.A.R.T._attributes)\n\nBlackblaze on ATA SSDs  \n[Blackblaze SSD SMART article](https://www.backblaze.com/blog/making-sense-of-ssd-smart-stats/)\n\nFor Micron Smart SSD read:  \n[crucial.com Official smart data](https://www.crucial.com/support/articles-faq-ssd/ssds-and-smart-data)\n\nSSD SMART Comparison table from Blackblaze:  \n[PDF Table](https://f001.backblazeb2.com/file/Backblaze_Blog/SSD+SMART+Stats+Comparison+Table.pdf)",
@@ -18136,12 +18126,12 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "exemplar": false,
-         "expr": "smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n* on(device,instance) group_right(model_name,serial_number)\r\nlabel_transform(smartctl_device_attribute{instance=~\"$instance\"}, \"attribute_name\", \"_\", \" \")\r\n\r\n# Get the last know timestamp and query it. (too slow, waiting on a more performant function)\r\n#WITH (\r\n#  smart_data = (\r\n#    smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n#    * on(device,instance) group_right(model_name,serial_number)\r\n#    smartctl_device_attribute{instance=~\"$instance\"}\r\n#  ),\r\n#  last_timestamp = max(timestamp(smart_data[$__range:])[$__range:]),\r\n#)\r\n#\r\n#smart_data @ last_timestamp  ",
+         "expr": "label_replace(\r\n  label_replace(\r\n    label_replace(\r\n      label_replace(\r\n        smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n        * on(device,instance) group_right(model_name,serial_number)\r\n        smartctl_device_attribute{instance=~\"$instance\"}\r\n      , \"attribute_name\", \"$1 $2\", \"attribute_name\", \"^(.*)_([^_]*)$\")\r\n    , \"attribute_name\", \"$1 $2\", \"attribute_name\", \"^(.*)_([^_]*)$\")\r\n  , \"attribute_name\", \"$1 $2\", \"attribute_name\", \"^(.*)_([^_]*)$\")\r\n, \"attribute_name\", \"$1 $2\", \"attribute_name\", \"^(.*)_([^_]*)$\")\r\n\r\n# MetricsQL original (label_transform is not available in PromQL):\r\n# smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n# * on(device,instance) group_right(model_name,serial_number)\r\n# label_transform(smartctl_device_attribute{instance=~\"$instance\"}, \"attribute_name\", \"_\", \" \")",
          "format": "table",
          "hide": false,
          "instant": true,
@@ -18280,7 +18270,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "SMART overall-health self-assessment test result.\n\nAnd Smartctl exit status for easy comparison.\n\nMore details on the bit graph nearby.",
@@ -18387,8 +18377,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n  * on(device,instance) group_right(model_name,serial_number)\r\n  smartctl_device_smart_status{instance=~\"$instance\"}\r\n) without(device)",
@@ -18398,7 +18388,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -18415,8 +18405,8 @@ data:
       },
       {
        "datasource": {
-        "type": "victoriametrics-metrics-datasource",
-        "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+        "type": "prometheus",
+        "uid": "${datasource}"
        },
        "description": "The return values of smartctl are defined by a bitmask.  \nIf all is well with the disk, the return value (exit status) of smartctl is 0 (all bits turned off). If a problem occurs, or an error, potential error, or fault is detected, then a non-zero status is returned.  \nIn this case, the eight different bits in the return value have the following meanings for ATA disks; some of these values may also be returned for SCSI disks.\n\nBit 0:  \nCommand line did not parse.\n\nBit 1:  \nDevice open failed, device did not return an IDENTIFY DEVICE structure, or device is in a low-power mode (see '-n' option above).\n\nBit 2:  \nSome SMART or other ATA command to the disk failed, or there was a checksum error in a SMART data structure (see '-b' option above).\n\nBit 3:  \nSMART status check returned \"DISK FAILING\".\n\nBit 4:  \nWe found prefail Attributes <= threshold.\n\nBit 5:  \nSMART status check returned \"DISK OK\" but we found that some (usage or prefail) Attributes have been <= threshold at some time in the past.\n\nBit 6:  \nThe device error log contains records of errors.\n\nBit 7:  \nThe device self-test log contains records of errors. [ATA only] Failed self-tests outdated by a newer successful extended self-test are ignored. ",
        "fieldConfig": {
@@ -18740,7 +18730,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -18998,8 +18988,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\r\n  max(\r\n    smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n      * on(device,instance) group_right(model_name,serial_number)\r\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\r\n  ) by (serial_number),\r\n  0x02 # Bit 1 = 0000 0010\r\n)",
@@ -19256,7 +19246,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -19515,8 +19505,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x08 # Bit 3 = 0000 1000\n)",
@@ -19774,7 +19764,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -20033,8 +20023,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x20 # BIT 5 = 0010 0000\n)",
@@ -20292,7 +20282,7 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "editorMode": "code",
@@ -20551,8 +20541,8 @@ data:
          "244": "\n",
          "245": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "bitmap_and(\n  max(\n    smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\n      * on(device,instance) group_right(model_name,serial_number)\n        smartctl_device_smartctl_exit_status{instance=~\"$instance\"}\n  ) by (serial_number),\n  0x80 # BIT 7 = 1000 0000\n)",
@@ -20569,7 +20559,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "Crucial  \n[Crucial WAF](https://web.archive.org/web/20230606053029/https://media-www.micron.com/-/media/client/global/documents/products/technical-note/solid-state-storage/tnfd23_m500_smart_attributes_calc_waf.pdf?rev=2e6d1f560a1548b3b6d4d8cf60335dca)\n\nFor now only crucial exposes waf easily.",
@@ -21161,8 +21151,8 @@ data:
          "505": "r",
          "506": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "# Crucial\r\n1 +\r\nmax(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"} * on(device,instance) group_right(serial_number)\r\n    smartctl_device_attribute{instance=~\"$instance\",attribute_id=\"248\",attribute_value_type=\"raw\"}\r\n) by(serial_number)\r\n/\r\nmax(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"} * on(device,instance) group_right(serial_number)\r\n    smartctl_device_attribute{instance=~\"$instance\",attribute_id=\"247\",attribute_value_type=\"raw\"}\r\n) by(serial_number)",
@@ -21178,7 +21168,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "",
@@ -21774,8 +21764,8 @@ data:
          "505": "r",
          "506": ")",
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(\r\n  smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n  * on(device,instance) group_right(model_name,serial_number)\r\n    smartctl_device_temperature{instance=~\"$instance\"}\r\n) by(serial_number)",
@@ -21791,7 +21781,7 @@ data:
       {
        "datasource": {
         "default": false,
-        "type": "victoriametrics-metrics-datasource",
+        "type": "prometheus",
         "uid": "${datasource}"
        },
        "description": "More info at:   \nhttps://en.m.wikipedia.org/wiki/Self-Monitoring,_Analysis_and_Reporting_Technology#Known_ATA_S.M.A.R.T._attributes",
@@ -21876,8 +21866,8 @@ data:
        "targets": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
-          "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+          "type": "prometheus",
+          "uid": "${datasource}"
          },
          "editorMode": "code",
          "expr": "max(smartctl_device{serial_number=\"$ata_serial\",instance=~\"$instance\"}\r\n  * on(device,instance) group_right(model_name,serial_number)\r\nsmartctl_device_attribute{instance=~\"$instance\", attribute_value_type=\"raw\"}) without(device)",
@@ -21981,8 +21971,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_gc_duration_seconds{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22073,8 +22063,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_threads{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22164,8 +22154,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_goroutines{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22255,8 +22245,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_info{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22361,8 +22351,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "rate(go_memstats_frees_total{job=~'$job',instance=~'$instance'}[3m])",
            "format": "time_series",
@@ -22453,8 +22443,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "rate(go_memstats_mallocs_total{job=~'$job',instance=~'$instance'}[3m])",
            "format": "time_series",
@@ -22544,8 +22534,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_mcache_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22635,8 +22625,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_mcache_inuse_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22734,8 +22724,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_last_gc_time_seconds{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22833,8 +22823,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_other_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -22931,8 +22921,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_mspan_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23029,8 +23019,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_mspan_inuse_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23127,8 +23117,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_next_gc_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23225,8 +23215,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_stack_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23323,8 +23313,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_stack_inuse_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23421,8 +23411,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "rate(go_memstats_lookups_total{job=~'$job',instance=~'$instance'}[3m])",
            "format": "time_series",
@@ -23519,8 +23509,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_alloc_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23617,8 +23607,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23712,8 +23702,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_gc_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23807,8 +23797,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_buck_hash_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -23920,8 +23910,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_heap_released_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -24019,8 +24009,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_heap_inuse_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -24118,8 +24108,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_heap_objects{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -24217,8 +24207,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_heap_idle_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -24312,8 +24302,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_heap_sys_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -24407,8 +24397,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "expr": "go_memstats_heap_alloc_bytes{job=~'$job',instance=~'$instance'}",
            "format": "time_series",
@@ -24434,7 +24424,7 @@ data:
        "panels": [
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Start time of the process since unix epoch in seconds.",
@@ -24521,8 +24511,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "process_start_time_seconds{job=~'$job',instance=~'$instance'}",
@@ -24536,7 +24526,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Number of open file descriptors.",
@@ -24623,8 +24613,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "process_open_fds{job=~'$job',instance=~'$instance'}",
@@ -24638,7 +24628,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Total user and system CPU time spent in seconds.",
@@ -24725,8 +24715,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "rate(process_cpu_seconds_total{job=~'$job',instance=~'$instance'}[3m])",
@@ -24740,7 +24730,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Virtual memory size in bytes.",
@@ -24827,8 +24817,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "process_virtual_memory_bytes{job=~'$job',instance=~'$instance'}",
@@ -24842,7 +24832,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Maximum amount of virtual memory available in bytes.",
@@ -24929,8 +24919,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "process_virtual_memory_max_bytes{job=~'$job',instance=~'$instance'}",
@@ -24944,7 +24934,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Resident memory size in bytes.",
@@ -25031,8 +25021,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "process_resident_memory_bytes{job=~'$job',instance=~'$instance'}",
@@ -25046,7 +25036,7 @@ data:
         },
         {
          "datasource": {
-          "type": "victoriametrics-metrics-datasource",
+          "type": "prometheus",
           "uid": "${datasource}"
          },
          "description": "Maximum number of open file descriptors.",
@@ -25132,8 +25122,8 @@ data:
          "targets": [
           {
            "datasource": {
-            "type": "victoriametrics-metrics-datasource",
-            "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+            "type": "prometheus",
+            "uid": "${datasource}"
            },
            "editorMode": "code",
            "expr": "process_max_fds{job=~'$job',instance=~'$instance'}",
@@ -25170,15 +25160,15 @@ data:
         "label": "datasource",
         "name": "datasource",
         "options": [],
-        "query": "victoriametrics-metrics-datasource",
+        "query": "prometheus",
         "refresh": 1,
-        "regex": "//",
+        "regex": "",
         "type": "datasource"
        },
        {
         "current": {
-         "text": "smartctl_exporter",
-         "value": "smartctl_exporter"
+         "text": "smartctl-exporter",
+         "value": "smartctl-exporter"
         },
         "includeAll": false,
         "label": "job",
@@ -25186,18 +25176,18 @@ data:
         "options": [
          {
           "selected": true,
-          "text": "smartctl_exporter",
-          "value": "smartctl_exporter"
+          "text": "smartctl-exporter",
+          "value": "smartctl-exporter"
          }
         ],
-        "query": "smartctl_exporter",
+        "query": "smartctl-exporter",
         "type": "custom"
        },
        {
         "allValue": ".*",
         "current": {},
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
+         "type": "prometheus",
          "uid": "${datasource}"
         },
         "definition": "label_values(smartctl_device,instance)",
@@ -25218,8 +25208,8 @@ data:
         "allValue": ".*",
         "current": {},
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
-         "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+         "type": "prometheus",
+         "uid": "${datasource}"
         },
         "definition": "label_values(smartctl_device,device)",
         "description": "Devices reported by smartctl for each drive",
@@ -25240,7 +25230,7 @@ data:
        {
         "current": {},
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
+         "type": "prometheus",
          "uid": "${datasource}"
         },
         "definition": "smartctl_device{instance=~\"$instance\"}",
@@ -25263,8 +25253,8 @@ data:
         "allowCustomValue": false,
         "current": {},
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
-         "uid": "${DS_VICTORIAMETRICS-METRICS-DATASOURCE}"
+         "type": "prometheus",
+         "uid": "${datasource}"
         },
         "definition": "query_result(smartctl_device{instance=~\"$instance\", interface=\"ata\"})",
         "description": "device =  Unique HDDs serial number reported by smartctl\nBasically, ata_serial is displayed as device but when used as value it uses a serial_number",
@@ -25287,7 +25277,7 @@ data:
         "allowCustomValue": false,
         "current": {},
         "datasource": {
-         "type": "victoriametrics-metrics-datasource",
+         "type": "prometheus",
          "uid": "${datasource}"
         },
         "definition": "query_result(smartctl_device{instance=~\"$instance\", interface=\"nvme\"})",
