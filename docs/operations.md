@@ -60,17 +60,20 @@ Matter health at any time:
 Home automation (Phase 9): Home Assistant runs in k3s and is VERIFIED
 (2026-09-30: desktop+mobile login, Matter toggles, recorder writing to the
 migrated DB). It is served at http://ha.lan and http://nas:8123
-(`apps/home/home-assistant`, hostNetwork). The Docker `homeassistant`
-container is stopped and kept as rollback until ~2026-10-07:
-`kubectl -n home scale deploy/home-assistant --replicas=0` then
-`cd /srv/homeassistant && docker compose start homeassistant` (use
-http://nas:8123 while rolled back; the Docker copy has no
-trusted_proxies, so ha.lan would 400). Its config copy is
-`/srv/appdata/home-assistant` (Docker original never modified; covered by
-the nightly snapshot + rclone jobs). matter-server is STILL the Docker
-container (until 9b): health check
-`docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
-`ha.lan` needs HA's `http: trusted_proxies: [10.42.0.0/16]` (in the
+(`apps/home/home-assistant`, hostNetwork). matter-server ALSO runs in k3s
+since 2026-09-30 (`apps/home/matter-server`, hostNetwork; fabric at
+`/srv/appdata/matter-server`; HA connects over localhost:5580 like in
+Docker). Matter health check:
+`kubectl -n home exec deploy/matter-server -- python3 /probe/health.py`
+(startupProbe/livenessProbe already run it; the alert
+MatterServerRestarting fires if the liveness probe restarts it >2x/h).
+Both Docker containers (`homeassistant`, `matter-server`) are stopped and
+kept as rollback until ~2026-10-14: scale the deploy to 0, then
+`cd /srv/homeassistant && docker compose start <service>` (use
+http://nas:8123 for HA while rolled back; the Docker copy has no
+trusted_proxies, so ha.lan would 400). Their config dirs were never
+modified (rsync copies only; covered by the nightly snapshot + rclone
+jobs). `ha.lan` needs HA's `http: trusted_proxies: [10.42.0.0/16]` (in the
 migrated `configuration.yaml`); without it HA answers 400 to Traefik.
 
 ## k3s vs Arch packages (never fight pacman with k3s)

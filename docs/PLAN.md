@@ -6,9 +6,9 @@ anything.
 
 Progress (2026-09-30): Phases 0-8 done (see `git log`). Phase 9: 9.0
 (networkd) verified 25/25; 9a Home Assistant verified in k3s
-(http://ha.lan + http://nas:8123; Docker container stopped as rollback);
-9b matter-server manifests committed (tag 8.1.2 digest-verified = running
-image; image pre-pulled) - RESUME FROM `docs/phase9-handoff.md`.
+(http://ha.lan + http://nas:8123); 9b matter-server migrated to k3s
+(12/12 nodes, self-heal + alert verified; REBOOT TEST pending) - RESUME
+FROM `docs/phase9-handoff.md`.
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
