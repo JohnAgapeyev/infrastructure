@@ -4,10 +4,10 @@ Status: PLAN ONLY. Nothing in this document has been executed. This file is the
 single reference for a later implementation session. Read it fully before doing
 anything.
 
-Progress (2026-09-30): Phases 0-8 done (see `git log`). Phase 9 in
-progress: 9.0 (networkd) verified 25/25 after the switch reboot; 9a Home
-Assistant applied to k3s (http://ha.lan + http://nas:8123, technical checks
-pass; Docker container stopped as rollback) - RESUME FROM
+Progress (2026-09-30): Phases 0-8 done (see `git log`). Phase 9: 9.0
+(networkd) verified 25/25; 9a Home Assistant verified in k3s
+(http://ha.lan + http://nas:8123; Docker container stopped as rollback).
+NEXT: 9b Matter Server (a later day), then Docker removal - RESUME FROM
 `docs/phase9-handoff.md`.
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"

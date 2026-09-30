@@ -57,14 +57,19 @@ manual restart); the networkd-revert safety-net timer was cancelled
 Matter health at any time:
 `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
 
-Home automation (Phase 9): Home Assistant runs in k3s
-(`apps/home/home-assistant`, hostNetwork) at http://ha.lan and
-http://nas:8123; the Docker `homeassistant` container is stopped and kept
-as rollback (`cd /srv/homeassistant && docker compose start homeassistant`
-after `kubectl -n home scale deploy/home-assistant --replicas=0`). Its
-config copy is `/srv/appdata/home-assistant` (Docker original never
-modified). matter-server is STILL the Docker container (until 9b): health
-check `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
+Home automation (Phase 9): Home Assistant runs in k3s and is VERIFIED
+(2026-09-30: desktop+mobile login, Matter toggles, recorder writing to the
+migrated DB). It is served at http://ha.lan and http://nas:8123
+(`apps/home/home-assistant`, hostNetwork). The Docker `homeassistant`
+container is stopped and kept as rollback until ~2026-10-07:
+`kubectl -n home scale deploy/home-assistant --replicas=0` then
+`cd /srv/homeassistant && docker compose start homeassistant` (use
+http://nas:8123 while rolled back; the Docker copy has no
+trusted_proxies, so ha.lan would 400). Its config copy is
+`/srv/appdata/home-assistant` (Docker original never modified; covered by
+the nightly snapshot + rclone jobs). matter-server is STILL the Docker
+container (until 9b): health check
+`docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
 `ha.lan` needs HA's `http: trusted_proxies: [10.42.0.0/16]` (in the
 migrated `configuration.yaml`); without it HA answers 400 to Traefik.
 

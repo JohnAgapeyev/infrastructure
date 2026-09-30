@@ -1,112 +1,117 @@
 # Phase 9 handoff (resume point)
 
-Updated 2026-09-30, after Phase 9a (Home Assistant) was applied to k3s and
-all automated checks passed. A fresh session should read this file first,
-then `docs/PLAN.md` section 13 (the authoritative Phase 9 design), then
-`docs/operations.md`. Ground rules in PLAN.md section 0 still apply (no
-sudo for the agent; every privileged command is handed to John and the
-agent waits for confirmation; commit after each phase).
+Updated 2026-09-30, after Phase 9a (Home Assistant) was VERIFIED. A fresh
+session should read this file first, then `docs/PLAN.md` section 13 (the
+authoritative Phase 9 design), then `docs/operations.md`. Ground rules in
+PLAN.md section 0 still apply (no sudo for the agent; every privileged
+command is handed to John and the agent waits for confirmation; commit
+after each phase).
 
 ## Where things stand
 
-- Phases 0-8 done and committed. Phase 9 in progress:
-- 9.0 (networkd) VERIFIED and committed (`cb5713b`): switch reboot clean,
-  `verify-networkd.sh` 25/25 PASS (network-online after DHCPv4+DHCPv6,
-  before Docker/k3s; k3s 0 restarts; matter 12/12 nodes). Revert timer
+- Phases 0-8 done and committed. Phase 9:
+- 9.0 (networkd) VERIFIED (`cb5713b`): switch reboot clean,
+  `verify-networkd.sh` 25/25 PASS; network-online after DHCPv4+DHCPv6,
+  before Docker/k3s; k3s 0 restarts; matter 12/12 nodes. Revert timer
   disabled + inactive. dhcpcd stays installed as the rollback path.
-- 9a (Home Assistant) APPLIED and technically verified; commits `295fadc`,
-  `ce4be81`, `3569235`, plus the "applied" commit. Cluster state:
-  - `home-assistant` Deployment in ns `home`: pod Running/Ready,
-    hostNetwork (10.0.0.4), `http://nas:8123` -> 200, `http://ha.lan` ->
-    200 via Traefik (selectorless Service + static EndpointSlice,
-    `trusted_proxies: [10.42.0.0/16]` appended to the migrated
-    configuration.yaml by the migration script; HA `/api/` -> 401 as
-    expected; HA logged the real pod-network source IP of a probe curl,
-    proving XFF trust works).
-  - Integrations identical to pre-migration (17 config entries: backup,
-    go2rtc, google_translate, group x6, linkplay, matter, met, mobile_app
-    x2, radio_browser, shopping_list, sun). No errors in the startup log
-    (the habluetooth NET_ADMIN/NET_RAW ERROR also appeared on every Docker
-    start - pre-existing noise, Bluetooth unused).
-  - matter integration loaded with no errors; Docker matter-server
-    untouched, `health.py` = 12/12 available.
-  - `verify-networkd.sh` re-run AFTER the migration: still failures: 0.
-- Docker `homeassistant` container: stopped (`exited`), config dir
-  `/srv/homeassistant/config` untouched (rsync copy only). Rollback:
+- 9a (Home Assistant) VERIFIED 2026-09-30 (John confirmed: desktop +
+  mobile login, Matter devices toggle in UI; no automations exist to
+  test - N/A). Automated checks: pod Running/Ready 0 restarts;
+  `http://ha.lan` 200 via Traefik (trusted_proxies works - HA logs real
+  client IPs); `http://nas:8123` 200; 17 config entries identical to
+  pre-migration; recorder writing to the migrated DB (WAL active, events
+  from post-migration logins/toggles present); `verify-networkd.sh`
+  re-run post-migration: failures: 0. `snapshot-sqlite.sh` + rclone
+  drop-in already cover `/srv/appdata/home-assistant` (written
+  anticipating 9a).
+- Docker `homeassistant` container: stopped, config dir untouched. ROLLBACK
+  (available until ~2026-10-07, then remove with the Docker cleanup):
   `kubectl -n home scale deploy/home-assistant --replicas=0` then
-  `cd /srv/homeassistant && sudo docker compose start homeassistant`
-  (use `http://nas:8123` while rolled back - `ha.lan` would 400 because
-  the Docker copy has no trusted_proxies).
-- PENDING: John's interactive 9a confirmation (see next section). After he
-  confirms, commit `phase 9a: verified` and this handoff collapses to the
-  9b summary. 9b (Matter) is a LATER DAY per PLAN 13.2.
+  `cd /srv/homeassistant && sudo docker compose start homeassistant`;
+  use `http://nas:8123` while rolled back (`ha.lan` would 400 - the Docker
+  copy has no trusted_proxies).
+- NEXT: 9b (Matter Server) on a LATER DAY per PLAN 13.2. Not started; no
+  manifests exist yet (`apps/home/matter-server/` currently holds only
+  health.py). matter-server is still the live Docker container.
 
-## First thing to do when resuming
+## First thing to do when resuming (9b day)
 
 ```
 kubectl -n home get deploy,pod            # HA still Running/Ready?
-docker inspect -f '{{.State.Status}}' homeassistant   # exited (rollback intact)
 docker exec -i matter-server python3 - < apps/home/matter-server/health.py
-git log --oneline -5
+docker inspect matter-server --format '{{.Image}} {{.State.Status}}'
+git log --oneline -3
 ```
 
-| Observation | Meaning / next action |
-|---|---|
-| HA pod Running, John confirmed the interactive checks | Commit `phase 9a: verified ...` if not done; 9b is next (later day). Follow the 9b summary below. |
-| HA pod Running, interactive checks not yet confirmed | Ask John for the list in the next section. |
-| HA pod crash-looping / not ready | `kubectl -n home describe pod -l app=home-assistant`, `kubectl -n home logs deploy/home-assistant --tail=100`. Rollback: scale to 0 + `docker compose start homeassistant`, use `http://nas:8123`. |
-| HA needs a restart after config edits | `kubectl -n home rollout restart deploy/home-assistant` (HA's own UI restart also works). |
+If HA is down: `kubectl -n home logs deploy/home-assistant --tail=100`,
+rollback above. Otherwise start 9b.
 
-## John's interactive 9a checklist (the only thing pending)
+## 9b plan (authoritative version: PLAN.md 13.2)
 
-1. `http://ha.lan` (and `http://nas:8123`) load the login page and his
-   credentials work.
-2. Mobile app reconnects (it may need the internal URL `http://10.0.0.4:8123`
-   or `http://nas:8123`; the companion app does not use ha.lan unless told).
-3. Matter devices controllable from the HA UI (lovelace toggles).
-4. One automation fires (e.g. a sunset/sun-based one; `sun` integration is
-   loaded).
-5. Optional: Settings -> Devices & Services -> discovery shows devices
-   (mDNS/SSDP); Settings -> Logs is clean apart from the habluetooth noise.
+1. Confirm the `ghcr.io/matter-js/python-matter-server:8.1.2` tag digest
+   equals the running digest `sha256:6827e352011e2d8c2bde771e446fcf72acc49150ef66bad978816bac1762aad3`
+   (`docker buildx imagetools inspect` or registry API) BEFORE writing the
+   tag into the manifest. 8.1.2 is the final release (project archived).
+2. `apps/home/matter-server/deployment.yaml`: `hostNetwork: true`,
+   `dnsPolicy: ClusterFirstWithHostNet`, replicas 1 Recreate, args
+   `--storage-path /data --paa-root-cert-dir /data/credentials`, hostPath
+   `/srv/appdata/matter-server` -> `/data`, hostPath `/run/dbus` -> `/run/dbus`
+   ro, `privileged: false` (AppArmor not active on Arch; compose
+   `apparmor:unconfined` needs no equivalent). Same busybox wait-for-network
+   init container as HA (`busybox:1.37.0`, validated on-node 2026-09-30).
+3. `health.py` via kustomize `configMapGenerator` mounted at `/probe`;
+   startupProbe exec `python3 /probe/health.py` period 10 s
+   failureThreshold 30; livenessProbe same command period 60 s timeout 10 s
+   failureThreshold 5. (Trade-off: if every device is genuinely offline the
+   pod restarts with backoff - harmless, restart is the recovery action.)
+4. PrometheusRule `MatterServerRestarting` in
+   `apps/observability/rules/prometheusrule.yaml`:
+   `increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2`.
+   Then `make apply-observability`.
+5. ### SUDO (John): `docker compose stop matter-server` in
+   `/srv/homeassistant`; `rsync -aHAX /home/john/docker/matter-server/data/
+   /srv/appdata/matter-server/` (1.5 MB; the fabric is irreplaceable -
+   extra copy to `/srv/Backups/migration-*/matter-fabric-copy-9b`).
+6. Agent: `make apply-home`; verify: HA Matter integration reconnects,
+   every device controllable, `kubectl -n home exec deploy/matter-server --
+   python3 /probe/health.py` all nodes; FULL REBOOT TEST (no manual action,
+   nodes available < 5 min after boot - this is the whole point of 9.0);
+   `kubectl -n home delete pod -l app=matter-server` recovers; ~30 s
+   ethernet pull recovers.
+7. After 2 weeks stable (HA + matter): Docker removal per PLAN 13.2 step 4
+   (### SUDO; keep dhcpcd installed as 9.0 rollback; archive legacy state
+   to `/srv/Backups/migration-*/legacy-state.tgz`).
+8. If matter-in-k8s stays flaky > 1 week: roll back to Docker (ChatGPT
+   session guidance: move Matter out rather than fight IPv6/mDNS in
+   Kubernetes).
 
 ## Key facts (do not re-derive)
 
-- HA runs as root (image default, s6 `/init` entrypoint); state
-  `/srv/appdata/home-assistant` root:root 11 MB; `.HA_VERSION` 2025.12.4 =
-  pinned image tag. In Docker it bound ONLY `/config` + `/etc/localtime`
-  (no dbus, no devices) - the k8s Deployment mirrors exactly that plus
-  busybox `wait-for-network` init (validated on-node) and
-  memory limit 2 Gi (Docker usage was ~505 MiB).
-- The init container waits for `ip -4 route show default` and
-  `ip -6 addr show dev enp5s0 scope global` (Phase 9.0 root-cause guard).
-- `ha.lan` Unbound override exists on OPNsense (A -> 10.0.0.4). Host-local
-  `getent` may still serve a cached NXDOMAIN for a while (resolved
-  negative caching) - that is cosmetic; clients and pods resolve fine.
+- HA in k8s: `ghcr.io/home-assistant/home-assistant:2025.12.4`, hostNetwork,
+  root (s6 `/init`), state `/srv/appdata/home-assistant` (root:root);
+  bluetooth NET_ADMIN/NET_RAW ERROR in its log is pre-existing Docker-era
+  noise, ignore. `ha.lan` = selectorless Service + static EndpointSlice +
+  Ingress; needs HA `http: trusted_proxies: [10.42.0.0/16]` (in the
+  migrated configuration.yaml). Unbound `ha` -> 10.0.0.4 exists.
+- systemd-resolved caches negative answers: a fresh Unbound record may not
+  resolve host-locally for a while; query `nslookup ha.lan 10.0.0.2` from
+  a busybox pod (dnsPolicy Default) to check the record itself.
 - coredns `forward . /etc/resolv.conf` works with the resolved stub because
-  kubelet translates `Default`-dnsPolicy pods to real upstreams (verified).
+  kubelet translates Default-dnsPolicy pods to real upstreams (verified).
+- Init container network wait: `ip -4 route show default` +
+  `ip -6 addr show dev enp5s0 scope global` (Phase 9.0 root-cause guard).
 - Boot/host-network/initramfs constraints: PLAN.md 13.0 + operations.md
   "Reboot behaviour" (never touch `ip=`, HOOKS, `.link`, mkinitcpio).
 - matter-server (Docker, until 9b): python-matter-server 8.1.2 (final;
-  project archived, successor matterjs-server), running digest
-  `ghcr.io/matter-js/python-matter-server@sha256:6827e352011e2d8c2bde771e446fcf72acc49150ef66bad978816bac1762aad3`,
-  data `/home/john/docker/matter-server/data` (fabric, irreplaceable),
-  12 nodes, host network, `restart: unless-stopped`. `john` can run docker
-  without sudo. HA reaches it at `ws://localhost:5580/ws`.
-
-## 9b (later day) - summary
-
-Follow PLAN.md 13.2. Pin `8.1.2` only after confirming the tag digest equals
-the running digest (`docker buildx imagetools inspect` or registry API).
-Same wait-for-network init container; `health.py` via kustomize
-`configMapGenerator` mounted at `/probe`; startupProbe exec `python3
-/probe/health.py` (period 10 s, failureThreshold 30); livenessProbe period
-60 s, timeout 10 s, failureThreshold 5; hostPath `/run/dbus` ro;
-PrometheusRule `MatterServerRestarting`
-(`increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2`)
-in `apps/observability/rules/prometheusrule.yaml`. SUDO data move per PLAN
-13.2 step 2 (+ extra fabric copy to `/srv/Backups/migration-*/`).
-Verification includes full reboot test, `kubectl delete pod`, ~30 s
-ethernet pull. Then Docker removal after 2 weeks stable (PLAN 13.2 step 4;
-keep dhcpcd installed), and deferred Phase 10 (matterjs-server).
+  successor matterjs-server = deferred Phase 10), running digest above,
+  data `/home/john/docker/matter-server/data` (fabric), 12 nodes, host
+  network, `restart: unless-stopped`, HA reaches it at
+  `ws://localhost:5580/ws`. `john` can run docker without sudo. The
+  compose mounts `/run/dbus` ro (Bluetooth via dbus, per its comment) and
+  sets `apparmor:unconfined` for the same reason; Bluetooth is not in use
+  (no bluetooth-adapter arg, no HA bluetooth config entry), but keep the
+  dbus mount in 9b exactly as PLAN 13.2 specifies - costless parity with
+  the container. mDNS needs no dbus: resolved mDNS/LLMNR are off and CHIP
+  owns 5353 itself.
 
 Delete or trim this handoff file once Phase 9 is complete.
