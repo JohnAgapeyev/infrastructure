@@ -48,12 +48,18 @@ kernel `ip=:::::eth0:dhcp`) is separate and must not be changed. Checks:
 `networkctl status enp5s0`, `resolvectl status`,
 `bash bootstrap/host/network/verify-networkd.sh`. Rollback:
 `sudo /usr/local/sbin/networkd-revert.sh` (reboots; `--no-reboot` to skip).
-Switch-boot verification (verify-networkd.sh, 25/25 PASS): network-online
-reached 36.9 s into the boot, AFTER DHCPv4 (32.2 s) + DHCPv6 (35.4 s) and
-BEFORE Docker (38.5 s) and k3s (45.8 s); k3s booted with 0 restarts and no
-"no default routes"; matter-server started clean (12/12 nodes available, no
-manual restart); the networkd-revert safety-net timer was cancelled
-(disabled + inactive).
+
+What a healthy reboot looks like since Phase 9 (verified 2026-09-30,
+twice): DHCPv4 ~42 s -> DHCPv6 ~45 s -> Network Online ~46 s -> k3s ~55 s;
+the home pods' containers are recreated ~10 s after that (lastState exit
+255 "Unknown" = died with the node, RESTARTS shows 1 - that is the reboot
+itself, not a crash). Expect WARNING "Startup probe failed" events for
+matter-server during the first ~2 min (ConnectionRefused, then
+nodes=12 available=0) - the semantic probe is WAITING for the nodes, which
+is exactly its job; all 12 come back on their own within ~2-3 min. A
+single boot-restart stays under the MatterServerRestarting threshold
+(>2/h), so no false alert. Matter health at any time:
+`kubectl -n home exec deploy/matter-server -- python3 /probe/health.py`.
 Matter health at any time:
 `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
 
