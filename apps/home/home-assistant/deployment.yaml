@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: home-assistant
+  namespace: home
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: home-assistant }
+  template:
+    metadata:
+      labels: { app: home-assistant }
+    spec:
+      # host network, like the Docker container this replaces: mDNS/SSDP
+      # discovery (5353/1900) and the legacy URL http://nas:8123. HA runs as
+      # root (image default) and owns root:root /srv/appdata/home-assistant.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        # Phase 9.0 root cause: do not start HA before enp5s0 is routable.
+        # hostNetwork makes the host interfaces visible here; the s6
+        # supervisor inside the HA image does not retry network binds.
+        - name: wait-for-network
+          image: busybox:1.37.0
+          command: [/bin/sh, -c]
+          args:
+            - |
+              until ip -4 route show default | grep -q .; do sleep 2; done
+              until ip -6 addr show dev enp5s0 scope global | grep -q .; do sleep 2; done
+      containers:
+        - name: home-assistant
+          image: ghcr.io/home-assistant/home-assistant:2025.12.4
+          securityContext:
+            # same as the Docker compose service (default, stated for parity)
+            privileged: false
+          env:
+            - { name: TZ, value: America/Vancouver }
+          ports:
+            - name: http
+              containerPort: 8123
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: localtime, mountPath: /etc/localtime, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /, port: 8123 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 8123 }
+            initialDelaySeconds: 60
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 2Gi }
+      volumes:
+        - name: config
+          hostPath: { path: /srv/appdata/home-assistant, type: Directory }
+        - name: localtime
+          hostPath: { path: /etc/localtime, type: File }

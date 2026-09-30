@@ -6,7 +6,8 @@ updates:
     groups:
       linuxserver: { patterns: ["lscr.io/linuxserver/*"] }
       exporters: { patterns: ["*exporter*", "ghcr.io/onedr0p/exportarr"] }
-      home: { patterns: ["ghcr.io/home-assistant/*", "ghcr.io/matter-js/*"] }
+      # busybox = the shared wait-for-network init container of the home apps
+      home: { patterns: ["ghcr.io/home-assistant/*", "ghcr.io/matter-js/*", "busybox"] }
     ignore:
       - dependency-name: "jellyfin/jellyfin"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
