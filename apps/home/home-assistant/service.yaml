@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: home-assistant
+  namespace: home
+spec:
+  # NO selector on purpose (PLAN 13.1): HA is hostNetwork on 10.0.0.4, and
+  # manual Endpoints keep ha.lan pointing at 10.0.0.4:8123 even during a
+  # rollback to the Docker container (same host port). A selector-based
+  # Service would lose its endpoints the moment the Deployment is scaled
+  # to 0.
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123

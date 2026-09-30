@@ -43,15 +43,23 @@ git log --oneline -5                          # which commits exist?
 
 ## The 9a steps that remain
 
+0. John (OPNsense UI): Services -> Unbound DNS -> Host Overrides -> add A
+   record `ha` in domain `lan` -> `10.0.0.4` (like the existing
+   jellyfin/qbit records; `ha.lan` does not resolve yet). Verify with
+   `getent hosts ha.lan` after adding.
 1. ### SUDO (user runs): `sudo bash bootstrap/host/phase9a-migrate-ha.sh`
    (stops Docker homeassistant; rsyncs `/srv/homeassistant/config/` ->
    `/srv/appdata/home-assistant/`; guard refuses to copy unless the
-   container is actually stopped; matter-server keeps running in Docker).
+   container is actually stopped; appends the `http:` trusted_proxies
+   block to the COPY only; matter-server keeps running in Docker).
 2. Agent: `make apply-home` (no sudo). Watch
    `kubectl -n home get pod -w` and `kubectl -n home logs deploy/home-assistant -f`.
 3. Verify (PLAN 13.1 step 3):
    - `http://nas:8123` loads and login works (same credentials; the copy
      includes `.storage` auth).
+   - `http://ha.lan` loads (200, not HA's `400 Bad Request` - that 400 is
+     the untrusted-XFF rejection and means trusted_proxies is missing).
+     Clients should show real IPs in HA, not 10.42.x.
    - All integrations loaded - compare the pre-migration config-entry list
      (taken 2026-09-30, 17 entries):
      `backup go2rtc google_translate group x6 linkplay matter met
@@ -65,12 +73,17 @@ git log --oneline -5                          # which commits exist?
    - `bash bootstrap/host/network/verify-networkd.sh` still 25/25 (the pod
      DNS checks now also exercise hostNetwork paths indirectly).
 4. On success: commit `phase 9a: verified ...` (summary in operations.md
-   endpoints table: Home Assistant stays `http://nas:8123`), leave the
-   Docker homeassistant container stopped for >= 1 week as rollback.
-5. Optional (deferred, only if John asks): Ingress `ha.lan` needs a Service
-   with manual Endpoints to 10.0.0.4:8123 AND `http: use_x_forwarded_for:
-   true, trusted_proxies: [10.42.0.0/16]` in HA `configuration.yaml`
-   (PLAN 13.1 step 1). Not built on purpose.
+   endpoints table: Home Assistant `http://ha.lan` + legacy
+   `http://nas:8123`), leave the Docker homeassistant container stopped for
+   >= 1 week as rollback.
+5. `ha.lan` ingress details: selectorless Service + static EndpointSlice
+   (`apps/home/home-assistant/{service,endpoints,ingress}.yaml`). During a
+   Docker rollback the pristine Docker config has no `trusted_proxies`, so
+   `http://ha.lan` returns 400 - use `http://nas:8123` while rolled back
+   (or re-run the 9a migration script's config block on the Docker copy).
+   The whole chain Traefik -> Service -> EndpointSlice -> 10.0.0.4:8123 was
+   e2e-verified pre-migration with a throwaway ingress (response came from
+   HA itself; the 400 was HA rejecting untrusted X-Forwarded-For).
 
 Rollback at any point: `kubectl -n home scale deploy/home-assistant
 --replicas=0` then `cd /srv/homeassistant && sudo docker compose start

@@ -151,7 +151,7 @@ HA/matter together).
 | Grafana | http://grafana.lan | |
 | Prometheus | http://prometheus.lan | |
 | Alertmanager | http://alertmanager.lan | |
-| Home Assistant | http://nas:8123 | (Phase 9) |
+| Home Assistant | http://ha.lan | http://nas:8123 |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
 apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
