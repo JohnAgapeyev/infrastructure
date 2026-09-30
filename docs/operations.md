@@ -57,6 +57,17 @@ manual restart); the networkd-revert safety-net timer was cancelled
 Matter health at any time:
 `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
 
+Home automation (Phase 9): Home Assistant runs in k3s
+(`apps/home/home-assistant`, hostNetwork) at http://ha.lan and
+http://nas:8123; the Docker `homeassistant` container is stopped and kept
+as rollback (`cd /srv/homeassistant && docker compose start homeassistant`
+after `kubectl -n home scale deploy/home-assistant --replicas=0`). Its
+config copy is `/srv/appdata/home-assistant` (Docker original never
+modified). matter-server is STILL the Docker container (until 9b): health
+check `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
+`ha.lan` needs HA's `http: trusted_proxies: [10.42.0.0/16]` (in the
+migrated `configuration.yaml`); without it HA answers 400 to Traefik.
+
 ## k3s vs Arch packages (never fight pacman with k3s)
 
 - k3s is ONE static binary at `/usr/local/bin/k3s` (get.k3s.io), embedding
@@ -167,3 +178,10 @@ apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
 - Scale-to-0 removes ServiceMonitor targets (absence != down): the
   MediaServiceDown alert works via the exporters' own health, not the app
   endpoints.
+- systemd-resolved caches negative DNS answers: right after adding an
+  Unbound host override the host itself may still serve the old NXDOMAIN
+  for a while (`getent hosts ha.lan` empty). Query OPNsense directly to
+  check the record: `nslookup ha.lan 10.0.0.2` from a busybox pod.
+- Home Assistant's habluetooth "Missing NET_ADMIN/NET_RAW capabilities"
+  ERROR appears on every start, including in Docker - Bluetooth is not in
+  use (no bluetooth config entry, no dbus mount); ignore it.
