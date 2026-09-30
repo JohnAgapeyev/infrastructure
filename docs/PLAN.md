@@ -4,8 +4,9 @@ Status: PLAN ONLY. Nothing in this document has been executed. This file is the
 single reference for a later implementation session. Read it fully before doing
 anything.
 
-Progress (2026-09-30): Phases 0-8 done (see `git log`). Phase 9 in progress -
-RESUME FROM `docs/phase9-handoff.md`.
+Progress (2026-09-30): Phases 0-8 done (see `git log`). Phase 9 in
+progress: 9.0 (networkd) verified 25/25 after the switch reboot; 9a Home
+Assistant is next - RESUME FROM `docs/phase9-handoff.md`.
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live

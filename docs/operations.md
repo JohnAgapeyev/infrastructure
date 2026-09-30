@@ -38,15 +38,22 @@ scaling to 0 quiets the noise and the logs stay available.
 on the RAID; only k3s runtime (SSD, `/var/lib/rancher/k3s`) would be lost
 on a root-disk failure.
 
-Host networking (Phase 9.0): the real root uses systemd-networkd
-(`/etc/systemd/network/10-lan.network`) + systemd-resolved; dhcpcd is
-installed but disabled. `network-online.target` waits until enp5s0 has
-routable IPv4 AND IPv6, so docker/k3s never start pre-network (the cause of
-the 2026-09-30 "all Matter devices unavailable" boot). The initramfs tinyssh
-unlock (`netconf` hook, kernel `ip=:::::eth0:dhcp`) is separate and must not
-be changed. Checks: `networkctl status enp5s0`, `resolvectl status`,
+Host networking (Phase 9.0, verified 2026-09-30): the real root uses
+systemd-networkd (`/etc/systemd/network/10-lan.network`) +
+systemd-resolved; dhcpcd is installed but disabled.
+`network-online.target` waits until enp5s0 has routable IPv4 AND IPv6, so
+docker/k3s never start pre-network (the cause of the 2026-09-30 "all Matter
+devices unavailable" boot). The initramfs tinyssh unlock (`netconf` hook,
+kernel `ip=:::::eth0:dhcp`) is separate and must not be changed. Checks:
+`networkctl status enp5s0`, `resolvectl status`,
 `bash bootstrap/host/network/verify-networkd.sh`. Rollback:
 `sudo /usr/local/sbin/networkd-revert.sh` (reboots; `--no-reboot` to skip).
+Switch-boot verification (verify-networkd.sh, 25/25 PASS): network-online
+reached 36.9 s into the boot, AFTER DHCPv4 (32.2 s) + DHCPv6 (35.4 s) and
+BEFORE Docker (38.5 s) and k3s (45.8 s); k3s booted with 0 restarts and no
+"no default routes"; matter-server started clean (12/12 nodes available, no
+manual restart); the networkd-revert safety-net timer was cancelled
+(disabled + inactive).
 Matter health at any time:
 `docker exec -i matter-server python3 - < apps/home/matter-server/health.py`.
 
