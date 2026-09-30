@@ -5,8 +5,14 @@ resources:
   - exportarr.yaml
   - qbittorrent.yaml
   - jellyfin-traefik.yaml
+  - matter.yaml
 generatorOptions:
   disableNameSuffixHash: true
+configMapGenerator:
+  - name: matter-exporter
+    namespace: observability
+    files:
+      - matter-exporter.py
 secretGenerator:
   - name: arr-apikeys
     namespace: observability
@@ -16,3 +22,17 @@ secretGenerator:
     namespace: observability
     env: ../../../secrets/qbittorrent.env
     type: Opaque
+  # 9c (HA /api/prometheus scrape) - activate BOTH entries below together
+  # only after:
+  #   1. secrets/homeassistant.env exists (cp from homeassistant.env.example,
+  #      fill with a HA long-lived access token)
+  #   2. `prometheus:` block was appended to the migrated HA
+  #      configuration.yaml (bootstrap/host/phase9c-ha-metrics.sh)
+  #   3. deploy/home-assistant was restarted (kubectl rollout restart)
+  # Otherwise the env file is missing and this whole kustomization fails
+  # to build.
+  # - home-assistant.yaml
+  # - name: homeassistant-token
+  #   namespace: home
+  #   env: ../../../secrets/homeassistant.env
+  #   type: Opaque

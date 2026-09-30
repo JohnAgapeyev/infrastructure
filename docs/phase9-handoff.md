@@ -85,3 +85,26 @@ Key facts live in operations.md ("Home automation", "Reboot behaviour",
 (`apps/home/matter-server/kustomization.yaml` must set namespace: home or
 the configMap volume ref is not rewritten) and the Prometheus rule reload
 lag (~1 min).
+
+## 9c (optional, staged): HA's own metrics via /api/prometheus
+
+Everything is prepared; activating needs two John steps + one agent
+wiring change:
+
+1. HA UI: Profile -> Security -> Long-lived access tokens -> Create Token.
+2. `cp secrets/homeassistant.env.example secrets/homeassistant.env` and
+   paste the token (key `HASS_PROMETHEUS_TOKEN`).
+3. ### SUDO: `sudo bash bootstrap/host/phase9c-ha-metrics.sh` (appends the
+   `prometheus:` block to /srv/appdata/home-assistant/configuration.yaml,
+   idempotent).
+4. Agent: `kubectl -n home rollout restart deploy/home-assistant`; then
+   uncomment the TWO `9c` entries in
+   apps/observability/exporters/kustomization.yaml (resource
+   home-assistant.yaml + secretGenerator homeassistant-token) and apply
+   the exporters kustomization. The ServiceMonitor (ns home, Service
+   labels added 2026-09-30) scrapes /api/prometheus with the token;
+   HomeAssistantDown activates automatically. Grafana "Home" dashboard's
+   HA stat starts showing data; HA sensor panels can be added to
+   home.yaml afterwards from whatever the integration actually exports.
+DO NOT uncomment before secrets/homeassistant.env exists - the missing
+env file breaks the whole exporters kustomization build (hence staging).

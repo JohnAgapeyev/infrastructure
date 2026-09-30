@@ -3,6 +3,10 @@ kind: Service
 metadata:
   name: jellyfin
   namespace: media
+  # ServiceMonitor (exporters/jellyfin-traefik.yaml) selects on this label
+  # - without it the operator never matches the Service and the jellyfin
+  # target silently does not exist (discovered 2026-09-30).
+  labels: { app: jellyfin }
 spec:
   # klipper servicelb binds host port 8096 (legacy URL http://nas:8096)
   type: LoadBalancer

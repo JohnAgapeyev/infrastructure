@@ -157,7 +157,18 @@ HA/matter together).
   `apps/observability/kube-prometheus-stack/values.yaml`.
 - Custom rules: `apps/observability/rules/prometheusrule.yaml`
   (mdadm failed disks, /srv < 500 GB free, SMART unhealthy,
-  MediaServiceDown for 10m).
+  MediaServiceDown for 10m; home: MatterServerRestarting,
+  MatterNodesUnavailable, MatterServerUnreachable, HomeAssistantDown).
+- Matter semantics (phase 9): `matter-exporter`
+  (`apps/observability/exporters/matter.yaml`, scrapes the WS API at
+  10.0.0.4:5580 like health.py) exports `matter_up`, `matter_nodes`,
+  `matter_nodes_available`, `matter_scrape_duration_seconds`.
+  `MatterNodesUnavailable` (available == 0 while up, 5m) is the ONLY
+  alert that sees the 2026-09-30 failure mode (port listening, HA
+  connected, no restarts, all nodes stuck unavailable).
+- Grafana dashboard "Home (Home Assistant + Matter)" (uid `home-matter`,
+  `apps/observability/dashboards/home.yaml`): node availability, exporter
+  health, home pod restarts/memory.
 - Test anytime: `kubectl -n media scale deploy/radarr --replicas=0` for
   ~11 minutes -> MediaServiceDown + TargetDown fire in Alertmanager.
 
@@ -199,3 +210,10 @@ apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
 - Home Assistant's habluetooth "Missing NET_ADMIN/NET_RAW capabilities"
   ERROR appears on every start, including in Docker - Bluetooth is not in
   use (no bluetooth config entry, no dbus mount); ignore it.
+- ServiceMonitors select SERVICES by their metadata labels - a Service
+  with no labels is silently never scraped (jellyfin was target-less from
+  phase 7 until 2026-09-30; fixed by labelling the Service `app: jellyfin`).
+- A pod's own Service gets Docker-link-style env vars injected
+  (`MATTER_EXPORTER_PORT=tcp://10.43.x.x:9566` for the matter-exporter
+  Service). Name script env vars so they cannot collide
+  (`MATTER_EXPORTER_LISTEN_PORT`).

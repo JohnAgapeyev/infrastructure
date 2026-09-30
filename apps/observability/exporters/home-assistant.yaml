@@ -1,0 +1,22 @@
+# 9c (staged, NOT yet listed in kustomization.yaml - see the comment
+# there for the activation steps): scrape HA's built-in prometheus
+# integration at /api/prometheus (needs a long-lived access token).
+# Targets the selectorless Service in apps/home/home-assistant/service.yaml
+# (static EndpointSlice 10.0.0.4:8123) - the same entry the ha.lan ingress
+# uses, so this survives rollbacks to the Docker container.
+apiVersion: monitoring.coreos.io/v1
+kind: ServiceMonitor
+metadata:
+  name: home-assistant
+  namespace: home
+  labels: { app: home-assistant }
+spec:
+  selector:
+    matchLabels: { app: home-assistant }
+  endpoints:
+    - port: http
+      path: /api/prometheus
+      interval: 30s
+      bearerTokenSecret:
+        name: homeassistant-token
+        key: HASS_PROMETHEUS_TOKEN

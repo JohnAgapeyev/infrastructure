@@ -59,3 +59,34 @@ spec:
           annotations:
             summary: "matter-server restarted more than twice in 1h"
             description: "The Matter liveness probe keeps failing; nodes may be persistently unreachable. Check `kubectl -n home logs deploy/matter-server` and the HA Matter integration."
+        - alert: MatterNodesUnavailable
+          # The 2026-09-30 failure mode: server up, port listening, HA
+          # connected, zero restarts - all nodes unavailable for hours.
+          # Only the matter-exporter semantic metric sees it.
+          expr: matter_nodes_available == 0 and matter_up == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "All Matter nodes unavailable while matter-server is up"
+            description: "matter-exporter reports {{ $value | humanize }} available nodes for 5m while the server answers get_nodes. This is the original boot-race failure mode. Check `kubectl -n home logs deploy/matter-server`; a `kubectl -n home rollout restart deploy/matter-server` usually recovers it."
+        - alert: MatterServerUnreachable
+          # Exporter cannot reach the WS API: pod down, crash-looping or
+          # the host network is broken (restart alert covers looping).
+          expr: matter_up == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "matter-exporter cannot reach matter-server (10m)"
+            description: "The WebSocket API at 10.0.0.4:5580 did not answer for 10 minutes. Check `kubectl -n home get pod -l app=matter-server`."
+        - alert: HomeAssistantDown
+          # Activates when the 9c ServiceMonitor is wired in
+          # (exporters/home-assistant.yaml).
+          expr: up{job="homeassistant"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Home Assistant scrape is down (10m)"
+            description: "Prometheus cannot scrape HA's /api/prometheus endpoint. Check http://nas:8123 and `kubectl -n home logs deploy/home-assistant`."

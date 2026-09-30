@@ -3,6 +3,10 @@ kind: Service
 metadata:
   name: home-assistant
   namespace: home
+  # selectorless on purpose (PLAN 13.1); the label is for the 9c
+  # ServiceMonitor (exporters/home-assistant.yaml), which selects
+  # Services by their metadata labels.
+  labels: { app: home-assistant }
 spec:
   # NO selector on purpose (PLAN 13.1): HA is hostNetwork on 10.0.0.4, and
   # manual Endpoints keep ha.lan pointing at 10.0.0.4:8123 even during a

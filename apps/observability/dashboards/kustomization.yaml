@@ -6,3 +6,4 @@ resources:
   - qbittorrent-exporter.yaml
   - traefik.yaml
   - exportarr.yaml
+  - home.yaml

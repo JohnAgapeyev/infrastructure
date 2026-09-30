@@ -1,0 +1,65 @@
+# matter-exporter: node availability of the k3s matter-server
+# (apps/home/matter-server, hostNetwork 10.0.0.4:5580 - reachable from the
+# pod network, so this exporter needs NO hostNetwork itself and adds no
+# host ports). Reuses the python-matter-server image (python3 + aiohttp).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matter-exporter
+  namespace: observability
+  labels: { app: matter-exporter }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: matter-exporter }
+  template:
+    metadata:
+      labels: { app: matter-exporter }
+    spec:
+      containers:
+        - name: matter-exporter
+          image: ghcr.io/matter-js/python-matter-server:8.1.2
+          command: [python3, /exporter/matter-exporter.py]
+          env:
+            # matter-server is hostNetwork on the node IP
+            - { name: MATTER_WS, value: "http://10.0.0.4:5580/ws" }
+            - { name: MATTER_HEALTH_TIMEOUT, value: "10" }
+          ports:
+            - { name: http, containerPort: 9566 }
+          readinessProbe:
+            httpGet: { path: /metrics, port: 9566 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          volumeMounts:
+            - { name: exporter, mountPath: /exporter, readOnly: true }
+      volumes:
+        # plain name (generatorOptions.disableNameSuffixHash in the
+        # kustomization) - reference stays stable
+        - name: exporter
+          configMap: { name: matter-exporter }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matter-exporter
+  namespace: observability
+  labels: { app: matter-exporter }
+spec:
+  selector: { app: matter-exporter }
+  ports:
+    - { name: http, port: 9566, targetPort: 9566 }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: matter-exporter
+  namespace: observability
+  labels: { app: matter-exporter }
+spec:
+  selector:
+    matchLabels: { app: matter-exporter }
+  endpoints:
+    - { port: http, interval: 30s, scrapeTimeout: 15s }
