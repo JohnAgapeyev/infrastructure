@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# namespace MUST be set here (not only in deployment.yaml): kustomize
+# rewrites the Deployment's volume configMap reference to the generated
+# hashed name only when the generated ConfigMap and the Deployment are in
+# the SAME namespace - otherwise the pod fails to mount /probe.
+namespace: home
+resources:
+  - deployment.yaml
+configMapGenerator:
+  # mounted at /probe; the startup/liveness probes exec
+  # `python3 /probe/health.py`. Any edit to health.py changes the hash and
+  # re-creates the pod (intentional).
+  - name: matter-server-health
+    files:
+      - health.py

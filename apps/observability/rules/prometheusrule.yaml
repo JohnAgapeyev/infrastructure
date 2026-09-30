@@ -46,3 +46,16 @@ spec:
           annotations:
             summary: "{{ $labels.job }} has been down for >10m"
             description: "Prometheus cannot scrape {{ $labels.job }} at {{ $labels.instance }}"
+    - name: home
+      rules:
+        - alert: MatterServerRestarting
+          # Phase 9b: matter-server restarts are the self-heal for "all
+          # nodes unavailable" (liveness probe). >2 in 1h means something
+          # is systematically wrong (probe too strict, network flapping).
+          expr: increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "matter-server restarted more than twice in 1h"
+            description: "The Matter liveness probe keeps failing; nodes may be persistently unreachable. Check `kubectl -n home logs deploy/matter-server` and the HA Matter integration."

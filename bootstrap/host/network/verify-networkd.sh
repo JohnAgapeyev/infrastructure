@@ -47,14 +47,23 @@ grep -E 'Reached target .*Network is Online|enp5s0: (DHCPv4|DHCPv6) address|Star
 check "k3s did not crash-restart at boot"  test "$(systemctl show -P NRestarts k3s)" = 0
 check "no 'no default routes' from k3s"    bash -c '! journalctl -b -u k3s --no-pager | grep -q "no default routes found"'
 
-echo "== matter-server (Docker) =="
+echo "== matter-server =="
 # "Network is unreachable" on mDNS advertise is normal noise (no-carrier
 # docker0/br-* interfaces); these two only appear when started pre-network.
-check "no pre-network startup errors since start" \
-    bash -c '! docker logs --since "$(docker inspect -f "{{.State.StartedAt}}" matter-server)" matter-server 2>&1 | grep -qE "Temporary failure in name resolution|Cannot assign requested address"'
+# Since 9b matter-server is a k8s hostNetwork pod; before 9b (or during a
+# rollback) it is the Docker container - probe whichever is live.
+if [ "$(kubectl -n home get deploy matter-server -o jsonpath='{.status.readyReplicas}' 2>/dev/null)" = "1" ]; then
+    check "no pre-network startup errors since start" \
+        bash -c '! kubectl -n home logs deploy/matter-server 2>&1 | grep -qE "Temporary failure in name resolution|Cannot assign requested address"'
+    probe() { kubectl -n home exec deploy/matter-server -- python3 /probe/health.py 2>&1; }
+else
+    check "no pre-network startup errors since start" \
+        bash -c '! docker logs --since "$(docker inspect -f "{{.State.StartedAt}}" matter-server)" matter-server 2>&1 | grep -qE "Temporary failure in name resolution|Cannot assign requested address"'
+    probe() { docker exec -i matter-server python3 - < apps/home/matter-server/health.py 2>&1; }
+fi
 ok=""
 for _ in $(seq 1 20); do   # nodes can take a minute or two to come up after start
-    if out=$(docker exec -i matter-server python3 - < apps/home/matter-server/health.py 2>&1); then ok=1; break; fi
+    if out=$(probe); then ok=1; break; fi
     sleep 15
 done
 echo "      $out"

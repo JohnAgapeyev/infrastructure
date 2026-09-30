@@ -1,117 +1,114 @@
 # Phase 9 handoff (resume point)
 
-Updated 2026-09-30, after Phase 9a (Home Assistant) was VERIFIED. A fresh
-session should read this file first, then `docs/PLAN.md` section 13 (the
-authoritative Phase 9 design), then `docs/operations.md`. Ground rules in
-PLAN.md section 0 still apply (no sudo for the agent; every privileged
-command is handed to John and the agent waits for confirmation; commit
-after each phase).
+Updated 2026-09-30, mid-9b: matter-server manifests are committed and the
+image is pre-pulled; the fabric move is waiting on John's SUDO script. A
+fresh session should read this file first, then `docs/PLAN.md` section 13,
+then `docs/operations.md`. Ground rules in PLAN.md section 0 still apply.
 
 ## Where things stand
 
-- Phases 0-8 done and committed. Phase 9:
-- 9.0 (networkd) VERIFIED (`cb5713b`): switch reboot clean,
-  `verify-networkd.sh` 25/25 PASS; network-online after DHCPv4+DHCPv6,
-  before Docker/k3s; k3s 0 restarts; matter 12/12 nodes. Revert timer
-  disabled + inactive. dhcpcd stays installed as the rollback path.
-- 9a (Home Assistant) VERIFIED 2026-09-30 (John confirmed: desktop +
-  mobile login, Matter devices toggle in UI; no automations exist to
-  test - N/A). Automated checks: pod Running/Ready 0 restarts;
-  `http://ha.lan` 200 via Traefik (trusted_proxies works - HA logs real
-  client IPs); `http://nas:8123` 200; 17 config entries identical to
-  pre-migration; recorder writing to the migrated DB (WAL active, events
-  from post-migration logins/toggles present); `verify-networkd.sh`
-  re-run post-migration: failures: 0. `snapshot-sqlite.sh` + rclone
-  drop-in already cover `/srv/appdata/home-assistant` (written
-  anticipating 9a).
-- Docker `homeassistant` container: stopped, config dir untouched. ROLLBACK
-  (available until ~2026-10-07, then remove with the Docker cleanup):
-  `kubectl -n home scale deploy/home-assistant --replicas=0` then
-  `cd /srv/homeassistant && sudo docker compose start homeassistant`;
-  use `http://nas:8123` while rolled back (`ha.lan` would 400 - the Docker
-  copy has no trusted_proxies).
-- NEXT: 9b (Matter Server) on a LATER DAY per PLAN 13.2. Not started; no
-  manifests exist yet (`apps/home/matter-server/` currently holds only
-  health.py). matter-server is still the live Docker container.
+- 9.0 (networkd) VERIFIED (`cb5713b`): verify-networkd.sh 25/25, revert
+  timer disabled. dhcpcd stays installed as rollback.
+- 9a (Home Assistant) VERIFIED (`d39dc5f`): k3s pod Running, http://ha.lan
+  + http://nas:8123, 17 integrations, recorder writing. Docker
+  `homeassistant` container stopped (rollback until ~2026-10-07).
+- 9b (matter-server) IN PROGRESS. Done so far:
+  - Digest gate PASSED (2026-09-30, live registry check): tags `8.1.2` and
+    `stable` BOTH resolve to index
+    `sha256:6827e352011e2d8c2bde771e446fcf72acc49150ef66bad978816bac1762aad3`
+    = the running Docker image's RepoDigest. Tag `8.1.2` is byte-identical.
+  - `apps/home/matter-server/{deployment.yaml,kustomization.yaml}`:
+    hostNetwork + ClusterFirstWithHostNet, Recreate, busybox 1.37.0
+    wait-for-network init (same as HA), args `--storage-path /data
+    --paa-root-cert-dir /data/credentials` (image ENTRYPOINT
+    `matter-server`, CMD overridden explicitly), hostPath
+    `/srv/appdata/matter-server` -> `/data`, `/run/dbus` ro,
+    `privileged: false`; health.py via configMapGenerator mounted at
+    /probe; startupProbe exec python3 /probe/health.py 10 s x 30
+    (5 min budget); livenessProbe 60 s / timeout 10 s / 5 failures
+    (= 5 min); limits memory 512 Mi (Docker usage: 68 MiB).
+  - GOTCHA fixed: kustomize only rewrites the Deployment's volume
+    configMap reference to the hashed name when the generated ConfigMap
+    and Deployment share a namespace -> `namespace: home` is set in
+    apps/home/matter-server/kustomization.yaml (comment explains).
+  - PrometheusRule `MatterServerRestarting` added to
+    apps/observability/rules/prometheusrule.yaml (home group; verified
+    dry-run; NOT applied to the cluster yet - do it after the migration).
+  - `bootstrap/host/phase9b-migrate-matter.sh` written (SUDO; stops Docker
+    matter-server, rsyncs the fabric to /srv/appdata/matter-server, extra
+    copy to /srv/Backups/migration-<date>/matter-fabric-copy-9b/).
+  - `bootstrap/host/network/verify-networkd.sh` matter-server section now
+    branches: k8s exec if deploy readyReplicas=1, else docker exec.
+  - Image pre-pulled into k3s containerd (145 MB, throwaway pod). Image
+    digest in containerd = tag 8.1.2 = running image.
+  - NOT DONE: the fabric move (John's SUDO), `make apply-home`, the
+    observability rules apply, verification (incl. reboot + ethernet-pull
+    tests), docs/commit.
 
-## First thing to do when resuming (9b day)
+## First thing to do when resuming
 
 ```
-kubectl -n home get deploy,pod            # HA still Running/Ready?
-docker exec -i matter-server python3 - < apps/home/matter-server/health.py
-docker inspect matter-server --format '{{.Image}} {{.State.Status}}'
-git log --oneline -3
+docker inspect -f '{{.State.Status}}' matter-server   # exited => John ran the script
+ls /srv/appdata/matter-server                          # fabric copied?
+kubectl -n home get deploy,pod                          # HA up, matter absent yet?
+kubectl -n home exec deploy/matter-server -- python3 /probe/health.py  # after apply
 ```
 
-If HA is down: `kubectl -n home logs deploy/home-assistant --tail=100`,
-rollback above. Otherwise start 9b.
+| Observation | Next action |
+|---|---|
+| Docker matter-server running, no /srv/appdata/matter-server | John has NOT run the script. Re-give the SUDO block below. |
+| Docker exited, fabric copied, no deploy | Run `make apply-home`, then the verification list. |
+| Deploy exists, pod Running/Ready + health.py 12/12 | Continue verification (HA reconnect, delete-pod test, then John's reboot + ethernet tests), then `kubectl kustomize --load-restrictor=... apps/observability/rules | kubectl apply -f -`, docs, commit. |
+| Pod crash-looping / startupProbe failing | `kubectl -n home describe pod -l app=matter-server`, `kubectl -n home logs deploy/matter-server`. Rollback: `kubectl -n home scale deploy/matter-server --replicas=0` + `cd /srv/homeassistant && sudo docker compose start matter-server` (Docker data dir was never modified). |
 
-## 9b plan (authoritative version: PLAN.md 13.2)
+## The 9b steps that remain
 
-1. Confirm the `ghcr.io/matter-js/python-matter-server:8.1.2` tag digest
-   equals the running digest `sha256:6827e352011e2d8c2bde771e446fcf72acc49150ef66bad978816bac1762aad3`
-   (`docker buildx imagetools inspect` or registry API) BEFORE writing the
-   tag into the manifest. 8.1.2 is the final release (project archived).
-2. `apps/home/matter-server/deployment.yaml`: `hostNetwork: true`,
-   `dnsPolicy: ClusterFirstWithHostNet`, replicas 1 Recreate, args
-   `--storage-path /data --paa-root-cert-dir /data/credentials`, hostPath
-   `/srv/appdata/matter-server` -> `/data`, hostPath `/run/dbus` -> `/run/dbus`
-   ro, `privileged: false` (AppArmor not active on Arch; compose
-   `apparmor:unconfined` needs no equivalent). Same busybox wait-for-network
-   init container as HA (`busybox:1.37.0`, validated on-node 2026-09-30).
-3. `health.py` via kustomize `configMapGenerator` mounted at `/probe`;
-   startupProbe exec `python3 /probe/health.py` period 10 s
-   failureThreshold 30; livenessProbe same command period 60 s timeout 10 s
-   failureThreshold 5. (Trade-off: if every device is genuinely offline the
-   pod restarts with backoff - harmless, restart is the recovery action.)
-4. PrometheusRule `MatterServerRestarting` in
-   `apps/observability/rules/prometheusrule.yaml`:
-   `increase(kube_pod_container_status_restarts_total{namespace="home",container="matter-server"}[1h]) > 2`.
-   Then `make apply-observability`.
-5. ### SUDO (John): `docker compose stop matter-server` in
-   `/srv/homeassistant`; `rsync -aHAX /home/john/docker/matter-server/data/
-   /srv/appdata/matter-server/` (1.5 MB; the fabric is irreplaceable -
-   extra copy to `/srv/Backups/migration-*/matter-fabric-copy-9b`).
-6. Agent: `make apply-home`; verify: HA Matter integration reconnects,
-   every device controllable, `kubectl -n home exec deploy/matter-server --
-   python3 /probe/health.py` all nodes; FULL REBOOT TEST (no manual action,
-   nodes available < 5 min after boot - this is the whole point of 9.0);
-   `kubectl -n home delete pod -l app=matter-server` recovers; ~30 s
-   ethernet pull recovers.
-7. After 2 weeks stable (HA + matter): Docker removal per PLAN 13.2 step 4
-   (### SUDO; keep dhcpcd installed as 9.0 rollback; archive legacy state
-   to `/srv/Backups/migration-*/legacy-state.tgz`).
-8. If matter-in-k8s stays flaky > 1 week: roll back to Docker (ChatGPT
-   session guidance: move Matter out rather than fight IPv6/mDNS in
-   Kubernetes).
+1. ### SUDO (user runs): `sudo bash bootstrap/host/phase9b-migrate-matter.sh`
+2. Agent: `make apply-home`; watch
+   `kubectl -n home get pod -w` + `kubectl -n home logs deploy/matter-server -f`.
+3. Verify:
+   - `kubectl -n home exec deploy/matter-server -- python3 /probe/health.py`
+     -> nodes=12 available=12 (may take a few minutes; startupProbe budget
+     is 5 min).
+   - HA Matter integration reconnected: HA UI devices controllable; no
+     matter errors in `kubectl -n home logs deploy/home-assistant`.
+   - `kubectl -n home delete pod -l app=matter-server` -> pod returns and
+     nodes recover (self-heal test).
+   - `bash bootstrap/host/network/verify-networkd.sh` -> failures: 0
+     (now probes matter-server via kubectl).
+4. Apply the alert rule:
+   `kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/rules | kubectl apply -f -`
+   (same command `make apply-observability` runs for rules, without the
+   full helm cycle). Check in Prometheus UI that `MatterServerRestarting`
+   is loaded.
+5. ### SUDO (user runs, reboot test - THE point of 9.0/9b): `sudo systemctl
+   reboot`; unlock LUKS via tinyssh; then wait ~5 min and confirm with
+   `bash bootstrap/host/network/verify-networkd.sh` (failures: 0 covers:
+   network-online ordering, no pre-network matter errors, nodes available
+   without manual action). Optional: ~30 s ethernet pull test.
+6. On success: commit `phase 9b: verified ...`, update operations.md
+   (matter-server in k3s; health check via kubectl; Docker rollback pair).
+   Leave the Docker container stopped >= 2 weeks; then Docker removal per
+   PLAN 13.2 step 4 (keep dhcpcd installed). If matter-in-k8s is flaky
+   > 1 week: roll back to Docker (PLAN 13.2 guidance).
 
 ## Key facts (do not re-derive)
 
-- HA in k8s: `ghcr.io/home-assistant/home-assistant:2025.12.4`, hostNetwork,
-  root (s6 `/init`), state `/srv/appdata/home-assistant` (root:root);
-  bluetooth NET_ADMIN/NET_RAW ERROR in its log is pre-existing Docker-era
-  noise, ignore. `ha.lan` = selectorless Service + static EndpointSlice +
-  Ingress; needs HA `http: trusted_proxies: [10.42.0.0/16]` (in the
-  migrated configuration.yaml). Unbound `ha` -> 10.0.0.4 exists.
-- systemd-resolved caches negative answers: a fresh Unbound record may not
-  resolve host-locally for a while; query `nslookup ha.lan 10.0.0.2` from
-  a busybox pod (dnsPolicy Default) to check the record itself.
-- coredns `forward . /etc/resolv.conf` works with the resolved stub because
-  kubelet translates Default-dnsPolicy pods to real upstreams (verified).
-- Init container network wait: `ip -4 route show default` +
-  `ip -6 addr show dev enp5s0 scope global` (Phase 9.0 root-cause guard).
-- Boot/host-network/initramfs constraints: PLAN.md 13.0 + operations.md
-  "Reboot behaviour" (never touch `ip=`, HOOKS, `.link`, mkinitcpio).
-- matter-server (Docker, until 9b): python-matter-server 8.1.2 (final;
-  successor matterjs-server = deferred Phase 10), running digest above,
-  data `/home/john/docker/matter-server/data` (fabric), 12 nodes, host
-  network, `restart: unless-stopped`, HA reaches it at
-  `ws://localhost:5580/ws`. `john` can run docker without sudo. The
-  compose mounts `/run/dbus` ro (Bluetooth via dbus, per its comment) and
-  sets `apparmor:unconfined` for the same reason; Bluetooth is not in use
-  (no bluetooth-adapter arg, no HA bluetooth config entry), but keep the
-  dbus mount in 9b exactly as PLAN 13.2 specifies - costless parity with
-  the container. mDNS needs no dbus: resolved mDNS/LLMNR are off and CHIP
-  owns 5353 itself.
+- matter-server image: ENTRYPOINT `matter-server`, default CMD
+  `--storage-path /data --paa-root-cert-dir /data/credentials`, runs as
+  root; `busybox`/`python3`+aiohttp available (health.py works in-image).
+- Fabric: `/home/john/docker/matter-server/data` (root:root 755, 1.5 MB:
+  `6722977231884329815.json` + `.backup` (the fabric, 600 KB each),
+  `chip_*.ini/json`, `credentials/` (PAA root certs)). Irreplaceable -
+  never modify the Docker copy, rsync only.
+- Both home pods are hostNetwork: HA reaches matter-server at
+  `ws://localhost:5580/ws` - same loopback as in Docker.
+- resolved mDNS/LLMNR are OFF; CHIP owns 5353 itself (avahi disabled).
+  `Network is unreachable` on mDNS advertise is normal noise.
+- kustomize namespace gotcha (configMapGenerator + namespaced Deployment):
+  see apps/home/matter-server/kustomization.yaml comment.
+- 9a facts (HA rollback pair, trusted_proxies, resolved negative-cache
+  quirk, coredns forward-via-stub note) are in the operations.md "Home
+  automation" section and PLAN 13.0-13.2.
 
 Delete or trim this handoff file once Phase 9 is complete.

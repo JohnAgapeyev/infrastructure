@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matter-server
+  namespace: home
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: matter-server }
+  template:
+    metadata:
+      labels: { app: matter-server }
+    spec:
+      # host network, like the Docker container this replaces: CHIP owns
+      # mDNS on 5353 and HA reaches the server at ws://localhost:5580/ws
+      # (both pods are hostNetwork, so that is the same localhost).
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      initContainers:
+        # Phase 9.0 root cause: the CHIP stack binds its
+        # mDNS/operational-discovery sockets once at start and never
+        # re-enumerates - starting before enp5s0 is routable left 12 nodes
+        # unavailable for 3 h (2026-09-30 boot race). Same guard as HA.
+        - name: wait-for-network
+          image: busybox:1.37.0
+          command: [/bin/sh, -c]
+          args:
+            - |
+              until ip -4 route show default | grep -q .; do sleep 2; done
+              until ip -6 addr show dev enp5s0 scope global | grep -q .; do sleep 2; done
+      containers:
+        - name: matter-server
+          # tag digest verified 2026-09-30: 8.1.2 and stable both resolve to
+          # index sha256:6827e352011e...aa d3 = the image the Docker
+          # container ran. 8.1.2 is the final release (project archived).
+          image: ghcr.io/matter-js/python-matter-server:8.1.2
+          securityContext:
+            # parity with the Docker compose (default, stated explicitly);
+            # its apparmor:unconfined was for Bluetooth, unused and not
+            # needed (AppArmor is not active on Arch anyway)
+            privileged: false
+          # image ENTRYPOINT is "matter-server"; args = its default CMD
+          args:
+            - --storage-path
+            - /data
+            - --paa-root-cert-dir
+            - /data/credentials
+          ports:
+            - name: ws
+              containerPort: 5580
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: dbus, mountPath: /run/dbus, readOnly: true }
+            - { name: probe, mountPath: /probe, readOnly: true }
+          # semantic health (apps/home/matter-server/health.py): a bare TCP
+          # check on 5580 never detects the failure mode this phase exists
+          # to fix - nodes unreachable while the port still listens.
+          startupProbe:
+            exec:
+              command: [python3, /probe/health.py]
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: [python3, /probe/health.py]
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/matter-server, type: Directory }
+        - name: dbus
+          hostPath: { path: /run/dbus, type: Directory }
+        - name: probe
+          configMap:
+            name: matter-server-health
