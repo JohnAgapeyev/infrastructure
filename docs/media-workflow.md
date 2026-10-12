@@ -96,6 +96,32 @@ Single Radarr + single Sonarr with TRaSH profiles synced by Recyclarr
 grabs the BEST-scoring release available at request time, then upgrades via
 RSS until the cutoff; it does not deliberately grab a small file first.
 
+## Disk usage / seeding cleanup (analyzed 2026-10-12, array hit 100%)
+
+The array filling up is NOT duplication: hardlink imports work (16.3 TB of
+torrent content shares inodes with libraries; a byte-duplicate scan of 400
+unique movie files found ZERO copies; spot-check: Mad Men S04E06 torrent +
+library file are the same inode 281870539, nlink=2). Real usage profile:
+
+- /srv/Media 20T (Torrents completed/ 16T - mostly the same bytes as the
+  libraries via hardlink; Movies avg 24GB/file, 38 remux-class >50GB).
+- qBittorrent client held 1598 torrents / 19.8 TB, of which 341 torrents
+  / ~6.5 TB were seeded >90d with ratio >= 1.0 AND hardlink-imported -
+  dead weight; 18 torrents / ~47GB were never imported at all
+  (featurettes, alt releases Radarr upgraded past).
+
+`scripts/qbit-cleanup.sh` (dry-run default, `--delete` to execute):
+deletes only seeding-state + ratio>=MIN_RATIO + age>=MIN_AGE_DAYS +
+fully-hardlinked + under-/srv/Media/Torrents torrents; reports un-imported
+ones for manual review instead of deleting. NOTE: the qBittorrent API
+reports POD paths (`/srv/misc/torrents/...` fastresume-compat mount) -
+the script translates to host paths for the inode checks. Removing an
+imported torrent + content only drops ONE hardlink; the library copy
+survives. No automation yet by owner decision (2026-10-12) - re-run the
+script when SrvFilesystemNearlyFull fires, or wire a timer later.
+
+Un-imported review list lives in the dry-run output (top-15 by size).
+
 ## Indexers
 
 Prowlarr manages indexers and syncs them to Radarr/Sonarr. Public trackers
