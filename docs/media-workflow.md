@@ -96,31 +96,50 @@ Single Radarr + single Sonarr with TRaSH profiles synced by Recyclarr
 grabs the BEST-scoring release available at request time, then upgrades via
 RSS until the cutoff; it does not deliberately grab a small file first.
 
-## Disk usage / seeding cleanup (analyzed 2026-10-12, array hit 100%)
+## Seeding cleanup / garbage collection (tool: scripts/qbit-cleanup.sh)
 
-The array filling up is NOT duplication: hardlink imports work (16.3 TB of
-torrent content shares inodes with libraries; a byte-duplicate scan of 400
-unique movie files found ZERO copies; spot-check: Mad Men S04E06 torrent +
-library file are the same inode 281870539, nlink=2). Real usage profile:
+Owner intent (2026-10-12): seed forever WHILE content is in the library;
+remove the torrent when the library copy is gone or was never imported
+(rejected quality / custom format). NOT age- or ratio-based - an
+age/ratio cutoff would contradict the seed-forever intent.
 
-- /srv/Media 20T (Torrents completed/ 16T - mostly the same bytes as the
-  libraries via hardlink; Movies avg 24GB/file, 38 remux-class >50GB).
-- qBittorrent client held 1598 torrents / 19.8 TB, of which 341 torrents
-  / ~6.5 TB were seeded >90d with ratio >= 1.0 AND hardlink-imported -
-  dead weight; 18 torrents / ~47GB were never imported at all
-  (featurettes, alt releases Radarr upgraded past).
+The oracle for "in my library" is the HARDLINK: *arr imports are
+hardlinks, so payload files with st_nlink >= 2 ARE the library file
+(same inode; verified inode-identical on Mad Men S04E06). Decision
+tree per torrent (uncategorized/manual torrents are never touched):
 
-`scripts/qbit-cleanup.sh` (dry-run default, `--delete` to execute):
-deletes only seeding-state + ratio>=MIN_RATIO + age>=MIN_AGE_DAYS +
-fully-hardlinked + under-/srv/Media/Torrents torrents; reports un-imported
-ones for manual review instead of deleting. NOTE: the qBittorrent API
-reports POD paths (`/srv/misc/torrents/...` fastresume-compat mount) -
-the script translates to host paths for the inode checks. Removing an
-imported torrent + content only drops ONE hardlink; the library copy
-survives. No automation yet by owner decision (2026-10-12) - re-run the
-script when SrvFilesystemNearlyFull fires, or wire a timer later.
+- state missingFiles              -> remove entry (payload already gone:
+                                     *arr upgrade deleted the file; the
+                                     errored entry lingers forever)
+- payload fully hardlinked        -> KEEP seeding (never touched)
+- payload partially hardlinked    -> report only (season pack where some
+                                     episodes were upgraded; deleting the
+                                     torrent would stop seeding the still-
+                                     linked episodes - decide per pack)
+- payload not linked, completed > GRACE_DAYS (default 14):
+  - still in an *arr queue          -> never-imported backlog (quality /
+                                     custom-format rejected; *arr has NO
+                                     native cleanup for these)
+  - not in any *arr queue          -> imported once, library copy since
+                                     deleted (owner's removal flow) or a
+                                     queue item *arr already purged (e.g.
+                                     Witcher S03 720p grabs sat 3 years)
+  Both -> remove torrent + delete files (frees the torrent-dir bytes;
+  library hardlinks are never affected).
 
-Un-imported review list lives in the dry-run output (top-15 by size).
+qBittorrent reports POD paths (/srv/misc/torrents/... fastresume-compat
+mount); the script translates to host paths for inode checks. *arr queues
+are fetched via kubectl exec (ClusterIP-only services), paginated.
+
+2026-10-12 first dry run: KEEP 871/9.5 TB seeding; deletable 320
+unlinked (2.0 TB: rejected 720p/BRRip grabs, upgrade-superseded releases,
+library-removed content) + 87 errored entries; 282 partial packs
+(6.9 TB nominal - only their unlinked files waste space) for manual
+review; 34 fresh (<14d) left alone. Season-pack duplication story:
+Sonarr tracks per-episode, so pack imports hardlink each episode file
+individually; individual-episode upgrades supersede just those episodes,
+breaking the pack (partial + errored buckets) - the *arr upgrade churn,
+not misconfigured duplication, is what fills the array.
 
 ## Indexers
 
