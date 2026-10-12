@@ -91,55 +91,86 @@ automatically.
 
 ## Quality / upgrades
 
-Single Radarr + single Sonarr with TRaSH profiles synced by Recyclarr
-(daily CronJob). Upgrades allowed up to Remux-2160p cutoff. The arr stack
-grabs the BEST-scoring release available at request time, then upgrades via
-RSS until the cutoff; it does not deliberately grab a small file first.
+Quality bands (recyclarr-synced, 2026-10-12). Band semantics: qualities
+list = ceiling; until_quality (= the *arr cutoff) = what "done" means;
+until_score ("Upgrade Until Custom Format Score") = churn appetite.
+until_score 10000 = "any score improvement is worth a re-download" - that
+manufactured the partial-pack/missingFiles waste; new values cap it.
+Assign per movie/series in the *arr UI; HD->UHD Upgrade keeps its legacy
+name because it holds all pre-existing assignments.
 
-## Seeding cleanup / garbage collection (tool: scripts/qbit-cleanup.sh)
+| Band (both apps) | Ceiling | Cutoff | until_score | For |
+|---|---|---|---|---|
+| HD->UHD Upgrade | Remux | Remux-2160p | 500 | "deserves the best" |
+| UHD Preferred | Remux | WEBDL-2160p | 100 | "4K if possible, 1080p okay" |
+| 1080p Good Enough | Bluray-1080p (720p floor) | WEBDL-1080p | 100 | "don't care much"; 720p-only releases still import and upgrade if a 1080p ever appears |
+
+Sonarr additionally: Anime (upgrades ON, cutoff Bluray-1080p Remux,
+until_score 100 - ongoing/airing shows; mid-run supersession breaks
+packs, accepted for ongoing shows) and Anime Archive (upgradeAllowed
+FALSE - finished series: best batch once, pack stays whole forever;
+flip a series here when it ends; Sonarr's API requires a valid cutoff
+even with upgrades off, hence the placeholder until_quality).
+
+TRaSH profiles synced daily by recyclarr; owner deviations (x265 not
+penalised, Anime Dual Audio +1000 / Uncensored +500) unchanged.
+
+## Seeding cleanup / garbage collection (qbit_manage CronJob)
 
 Owner intent (2026-10-12): seed forever WHILE content is in the library;
-remove the torrent when the library copy is gone or was never imported
-(rejected quality / custom format). NOT age- or ratio-based - an
-age/ratio cutoff would contradict the seed-forever intent.
+remove the torrent when its payload is no longer hardlinked into a
+library (quality-rejected / superseded / library-deleted). NOT
+age/ratio-based. The oracle for "in my library" is the HARDLINK (*arr
+imports hardlink; payload files with st_nlink >= 2 ARE the library file
+- verified inode-identical on Mad Men S04E06 and Mushoku S03E14 Cytox).
 
-The oracle for "in my library" is the HARDLINK: *arr imports are
-hardlinks, so payload files with st_nlink >= 2 ARE the library file
-(same inode; verified inode-identical on Mad Men S04E06). Decision
-tree per torrent (uncategorized/manual torrents are never touched):
+Ongoing GC is `apps/media/qbit-manage/` (bobokun/qbit_manage v4.13.0,
+CronJob 04:45 daily, dry-run toggle in its configmap):
+- `tag_nohardlinks` on the *arr categories (Movies, TV, anime-sonarr):
+  largest-file nlink check; links outside the torrent root = in library.
+- `share_limits`: noHL-tagged torrents get 14d max/min seeding (old
+  torrents removed next run; fresh supersessions seed up to 14d more);
+  Stop action + qbm cleanup deletes through the recycle bin
+  (`/srv/Media/Torrents/.qbm-recycle`, emptied after 14d - matches the
+  *arr `.recycle` window; .torrent/.fastresume copies kept for re-add).
+  The default group resets everything else to no limits (seed forever).
+- Deliberately OFF: `recheck` (would RE-DOWNLOAD superseded/missingFiles
+  content - never enable), `rem_orphaned` (revisit later),
+  cat/tracker tagging (out of scope).
+- qbm pod mounts BOTH path views (/srv/Media + /srv/misc/torrents):
+  torrent history has mixed content_path forms; with only the
+  /srv/misc view, every host-form torrent reads as no-hardlinks
+  (first dry run showed 706 false noHL before the fix).
+- qbm's no-hardlinks check is per-torrent LARGEST-FILE: a season pack
+  whose biggest file was superseded gets cleaned even if other
+  episodes are still linked - coarser than per-file.
+- Dry-run caveat: `disable_qbt_default_share_limits` applies even in
+  dry-run (qb global share limits got disabled during the first dry run).
+- Legacy qb categories Anime (137) / Porn point INTO library dirs
+  (pre-migration); excluded from nohardlinks, left seed-forever.
 
-- state missingFiles              -> remove entry (payload already gone:
-                                     *arr upgrade deleted the file; the
-                                     errored entry lingers forever)
-- payload fully hardlinked        -> KEEP seeding (never touched)
-- payload partially hardlinked    -> report only (season pack where some
-                                     episodes were upgraded; deleting the
-                                     torrent would stop seeding the still-
-                                     linked episodes - decide per pack)
-- payload not linked, completed > GRACE_DAYS (default 14):
-  - still in an *arr queue          -> never-imported backlog (quality /
-                                     custom-format rejected; *arr has NO
-                                     native cleanup for these)
-  - not in any *arr queue          -> imported once, library copy since
-                                     deleted (owner's removal flow) or a
-                                     queue item *arr already purged (e.g.
-                                     Witcher S03 720p grabs sat 3 years)
-  Both -> remove torrent + delete files (frees the torrent-dir bytes;
-  library hardlinks are never affected).
+`scripts/qbit-cleanup.sh` remains for what qbm cannot do: the
+missingFiles errored-entry sweep (87 entries at last run) and per-file
+partial-pack reporting; run manually when desired.
 
-qBittorrent reports POD paths (/srv/misc/torrents/... fastresume-compat
-mount); the script translates to host paths for inode checks. *arr queues
-are fetched via kubectl exec (ClusterIP-only services), paginated.
+Second dry run (2026-10-12, config as committed): Movies 103/353, TV
+56/308, anime-sonarr 176/706 noHL; total 335. Spot-checks: Witcher
+720p / Prometheus / Godfather superseded releases tagged; library-linked
+files not.
 
-2026-10-12 first dry run: KEEP 871/9.5 TB seeding; deletable 320
-unlinked (2.0 TB: rejected 720p/BRRip grabs, upgrade-superseded releases,
-library-removed content) + 87 errored entries; 282 partial packs
-(6.9 TB nominal - only their unlinked files waste space) for manual
-review; 34 fresh (<14d) left alone. Season-pack duplication story:
-Sonarr tracks per-episode, so pack imports hardlink each episode file
-individually; individual-episode upgrades supersede just those episodes,
-breaking the pack (partial + errored buckets) - the *arr upgrade churn,
-not misconfigured duplication, is what fills the array.
+## qBittorrent seeding config (2026-10-12)
+
+- Global ratio limit DISABLED (was max_ratio 10 + action super-seed:
+  302 healthy torrents had silently flipped into super-seeding =
+  initial-seeding mode, engineered to MINIMIZE upload to the swarm -
+  exactly the wrong torrents to ration). Per-torrent super-seeding
+  flags cleared (POST setSuperSeeding hashes=all value=false; this qb
+  build does not expose super_seeding on the properties endpoint, so
+  no API read-back - the 200 + prefs is the verification).
+- Queueing DISABLED (all torrents seed concurrently - the "go wide"
+  strategy), upload slots rate-based, fastest-upload choking,
+  coalesced read/write. Upload cap 25 MB/s.
+- qbm owns share limits per its share_limits groups (see above).
 
 ## Indexers
 

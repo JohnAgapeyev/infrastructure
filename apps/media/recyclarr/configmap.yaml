@@ -25,11 +25,19 @@ data:
           type: movie
 
         quality_profiles:
-          - name: HD->UHD Upgrade
+          # ---- Quality bands (docs/media-workflow.md) ----
+          # Band semantics: qualities list = ceiling; until_quality (== the
+          # *arr cutoff) = what "done" means; until_score = churn appetite
+          # (score-only upgrades below this net gain are ignored - the
+          # anti-pack-breakage brake; 10000 means "any improvement is worth
+          # 60GB", which manufactured the partial-pack waste).
+          # HD->UHD Upgrade keeps its legacy name: it is assigned to every
+          # existing movie; renaming would orphan assignments.
+          - name: HD->UHD Upgrade        # remux band: "deserves the best"
             upgrade:
               allowed: true
               until_quality: Remux-2160p
-              until_score: 10000
+              until_score: 500          # was 10000 (churn fix 2026-10-12)
             reset_unmatched_scores:
               enabled: true
             qualities:
@@ -40,6 +48,36 @@ data:
               - name: Bluray-1080p
               - name: WEBDL-1080p
               - name: WEBRip-1080p
+          - name: UHD Preferred         # "4K if possible, 1080p okay"
+            upgrade:
+              allowed: true
+              until_quality: WEBDL-2160p
+              until_score: 100
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Remux-2160p
+              - name: Bluray-2160p
+              - name: WEBDL-2160p
+              - name: WEBRip-2160p
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+          - name: 1080p Good Enough     # 1080p ceiling, 720p floor: old or
+            upgrade:                    # obscure releases that only exist
+              allowed: true             # at 720p still import; a later
+              until_quality: WEBDL-1080p # 1080p release upgrades them
+              until_score: 100
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+              - name: Bluray-720p
+              - name: WEBDL-720p
+              - name: WEBRip-720p
+              - name: HDTV-720p
 
         custom_format_groups:
           add:
@@ -49,6 +87,8 @@ data:
               select_all: true
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [Unwanted]: defaults (BR-DISK, LQ, LQ-RT, Upscaled, 3D, AV1,
             # Extras, Generated Dynamic HDR, ...) + selected extras
             - trash_id: a3ac6af01d78e4f21fcb75f601ac96df
@@ -59,26 +99,38 @@ data:
                 - f537cf427b64c38c8e36298f657e4828  # Scene
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [Required] Repack/Proper
             - trash_id: d688ff99733a9bc626c37eb61ea74704
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [HDR Formats] HDR (+500)
             - trash_id: ef20e67b95a381fb3bc6d1f06ea24f46
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [HDR Formats] DV Boost (+1000)
             - trash_id: 1616617ab3a14397a2b2321bcbda44d1
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [HDR Formats] HDR10+ Boost (+100)
             - trash_id: b29413a7487478fe98228ce79e5689e4
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [HDR Formats] DV (w/o HDR fallback) (-10000)
             - trash_id: 7fc2751eef7e6bdc70b74136e5e35c76
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
           # NOTE: [Optional] Golden Rule UHD (ff204bbcecdd487d1cefcefdbf0c278d)
           # intentionally NOT added: its default member x265 (no HDR/DV)
           # would penalise x265, which the owner explicitly does not want.
@@ -90,11 +142,20 @@ data:
         delete_old_custom_formats: true
 
         quality_profiles:
+          # Band semantics: see the radarr section above. Sonarr bands:
+          #   HD->UHD Upgrade  - remux band (legacy name kept; assigned)
+          #   UHD Preferred    - "4K if possible, 1080p okay"
+          #   1080p Good Enough - 1080p ceiling with 720p floor
+          #   Anime            - upgrades ON for ongoing/airing shows
+          #   Anime Archive    - upgrades OFF for finished series: best
+          #     batch once, pack stays whole forever (no supersession ->
+          #     no partial packs / missingFiles for that show). Flip a
+          #     series here when it ends (one-time UI assignment).
           - name: HD->UHD Upgrade
             upgrade:
               allowed: true
               until_quality: Bluray-2160p Remux
-              until_score: 10000
+              until_score: 500          # was 10000 (churn fix 2026-10-12)
             reset_unmatched_scores:
               enabled: true
             qualities:
@@ -105,11 +166,56 @@ data:
               - name: Bluray-1080p
               - name: WEBDL-1080p
               - name: WEBRip-1080p
+          - name: UHD Preferred
+            upgrade:
+              allowed: true
+              until_quality: WEBDL-2160p
+              until_score: 100
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Bluray-2160p Remux
+              - name: Bluray-2160p
+              - name: WEBDL-2160p
+              - name: WEBRip-2160p
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+          - name: 1080p Good Enough
+            upgrade:
+              allowed: true
+              until_quality: WEBDL-1080p
+              until_score: 100
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+              - name: Bluray-720p
+              - name: WEBDL-720p
+              - name: WEBRip-720p
+              - name: HDTV-720p
           - name: Anime
             upgrade:
               allowed: true
               until_quality: Bluray-1080p Remux
-              until_score: 10000
+              until_score: 100          # was 10000 (churn fix 2026-10-12)
+            reset_unmatched_scores:
+              enabled: true
+            qualities:
+              - name: Bluray-1080p Remux
+              - name: Bluray-1080p
+              - name: WEBDL-1080p
+              - name: WEBRip-1080p
+              - name: HDTV-1080p
+          - name: Anime Archive
+            upgrade:
+              allowed: false            # grab best batch once, freeze.
+              # cutoff is meaningless with upgrades off, but Sonarr's API
+              # REQUIRES it to be an allowed quality (recyclarr sends 0 =
+              # Unknown otherwise and the sync 400s)
+              until_quality: WEBDL-1080p
             reset_unmatched_scores:
               enabled: true
             qualities:
@@ -126,6 +232,8 @@ data:
               select_all: true
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [Unwanted]: defaults (AV1, Bad Dual, BR-DISK, Extras, LQ, LQ-RT,
             # Upscaled) + selected extras
             - trash_id: 59c3af66780d08332fdc64e68297098f
@@ -136,25 +244,34 @@ data:
                 - 1b3994c551cbb92a2c781af061f4ab44  # Scene
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [Required] Repack/Proper (both profiles)
             - trash_id: 22256473b656e195eabc2798e326fbb7
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
                 - name: Anime
+                - name: Anime Archive
             # [Streaming Services] HD/UHD boost
             - trash_id: 85fae4a2294965b75710ef2989c850eb
               assign_scores_to:
                 - name: HD->UHD Upgrade
+                - name: UHD Preferred
+                - name: 1080p Good Enough
             # [Release Groups] Anime: BD tiers 01-08, Web tiers 01-06,
             # Anime Raws, Anime LQ Groups
             - trash_id: f206572b1147d0221bb1c96765b349e8
               select_all: true
               assign_scores_to:
                 - name: Anime
+                - name: Anime Archive
             # [Streaming Services] Anime (ABEMA, CR, HIDIVE, ...)
             - trash_id: f54985e5e96747cef58731f1cf4c9181
               assign_scores_to:
                 - name: Anime
+                - name: Anime Archive
 
         custom_formats:
           # Owner decision (plan section 8): Dual Audio high, Uncensored
@@ -164,8 +281,12 @@ data:
             assign_scores_to:
               - name: Anime
                 score: 1000
+              - name: Anime Archive
+                score: 1000
           - trash_ids:
               - 026d5aadd1a6b4e550b134cb6c72b3ca  # Uncensored
             assign_scores_to:
               - name: Anime
+                score: 500
+              - name: Anime Archive
                 score: 500

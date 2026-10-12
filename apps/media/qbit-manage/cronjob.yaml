@@ -1,0 +1,72 @@
+# qbit_manage seeding GC - one-shot daily run (no scheduler/web inside qbm;
+# k8s owns the schedule). Same mount layout as the qbittorrent pod so
+# content_path values match (see configmap for the GC logic).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: qbit-manage
+  namespace: media
+spec:
+  schedule: "45 4 * * *"        # before recyclarr (05:30); order irrelevant
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            # match qbittorrent pod user/group so recycle-bin moves and
+            # content deletions succeed on the 1005:1003-owned files
+            runAsUser: 1005
+            runAsGroup: 1003
+          initContainers:
+            # qbm saves config.yml back to /config on load (normalizes it),
+            # so the git-tracked ConfigMap cannot be mounted read-only at
+            # /config/config.yml - copy it into the writable host dir.
+            - name: copy-config
+              image: busybox:1.37.0
+              command: ["cp", "/defaults/config.yml", "/config/config.yml"]
+              volumeMounts:
+                - { name: config, mountPath: /config }
+                - { name: config-src, mountPath: /defaults }
+          containers:
+            - name: qbit-manage
+              image: bobokun/qbit_manage:v4.13.0
+              # default CMD of the image is `python3 qbit_manage.py`; append
+              # flags to it (entrypoint execs "$@" verbatim - flags as the
+              # first arg would hit bash exec's option parsing)
+              args: ["python3", "qbit_manage.py", "--run"]
+              env:
+                - { name: TZ, value: America/Vancouver }
+                # k8s is not docker-detectable by the image; the web server
+                # would otherwise start and hold the job open forever
+                - { name: QBT_WEB_SERVER, value: "false" }
+                - { name: QBT_LOGFILE, value: qbit_manage.log }
+                - name: QBIT_WEBUI_USER
+                  valueFrom: { secretKeyRef: { name: qbittorrent-creds, key: QBIT_WEBUI_USER } }
+                - name: QBIT_WEBUI_PASS
+                  valueFrom: { secretKeyRef: { name: qbittorrent-creds, key: QBIT_WEBUI_PASS } }
+              volumeMounts:
+                - { name: config, mountPath: /config }
+                # MUST mirror the qbittorrent pod's view: torrent history has
+                # BOTH path forms (pre-migration fastresume uses
+                # /srv/misc/torrents, newer *arr-added torrents use
+                # /srv/Media/Torrents). qbm must resolve both or it flags
+                # every host-form torrent as no-hardlinks.
+                - { name: media, mountPath: /srv/Media }
+                - { name: torrents, mountPath: /srv/misc/torrents }
+                # read-only: .torrent/.fastresume copies for the recycle bin
+                - { name: qbittorrent-config, mountPath: /qbittorrent, readOnly: true }
+          volumes:
+            - name: config
+              hostPath: { path: /srv/appdata/qbit-manage, type: Directory }
+            - name: config-src
+              configMap: { name: qbit-manage-config }
+            - name: media
+              hostPath: { path: /srv/Media, type: Directory }
+            - name: torrents
+              hostPath: { path: /srv/Media/Torrents, type: Directory }
+            - name: qbittorrent-config
+              hostPath: { path: /srv/appdata/qbittorrent, type: Directory }

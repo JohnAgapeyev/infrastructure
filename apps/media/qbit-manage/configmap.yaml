@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qbit-manage-config
+  namespace: media
+data:
+  config.yml: |
+    # qbit_manage v4 config - seeding garbage collector implementing the
+    # owner intent (2026-10-12): seed forever while content is in the
+    # library; remove the torrent when its payload is no longer hardlinked
+    # into a library (quality-rejected / superseded / library-deleted).
+    #
+    # Division of labor with scripts/qbit-cleanup.sh:
+    #   qbm: ongoing GC (tag noHL + share-limits cleanup + recyclebin).
+    #   script: missingFiles errored-entry sweep (qbm recheck would
+    #           RE-DOWNLOAD those - recheck stays off here) and per-file
+    #           partial-pack reporting.
+    #
+    # Scope deliberately minimal: no category/tracker tagging, no unregistered
+    # removal, no orphaned scan (heavy on 16T; revisit later if wanted).
+    commands:
+      dry_run: True          # flip to False after reviewing a run
+      recheck: False         # NEVER enable: rechecks missingFiles torrents
+      cat_update: False      #  -> re-downloads superseded releases
+      tag_update: False
+      rem_unregistered: False
+      tag_tracker_error: False
+      rem_orphaned: False
+      tag_nohardlinks: True
+      share_limits: True
+      skip_cleanup: False
+
+    qbt:
+      host: "http://qbittorrent.media.svc.cluster.local:8080"
+      user: !ENV QBIT_WEBUI_USER
+      pass: !ENV QBIT_WEBUI_PASS
+
+    settings:
+      force_auto_tmm: False
+      nohardlinks_tag: noHL
+      share_limits_tag: ~share_limit
+      share_limits_min_seeding_time_tag: MinSeedTimeNotReached
+      # qbm owns share limits (qBittorrent's own global ratio limit was
+      # disabled 2026-10-12 - it flip-flopped 300+ healthy torrents into
+      # super-seeding at ratio 10, which minimizes upload to the swarm's
+      # most-wanted content; see docs/media-workflow.md)
+      disable_qbt_default_share_limits: True
+      share_limits_filter_completed: True
+      tag_nohardlinks_filter_completed: True
+
+    directory:
+      # Path must match what qBittorrent reports in content_path: the pod
+      # mounts /srv/Media/Torrents at /srv/misc/torrents (fastresume
+      # compat), and qbm mounts it the same way. qbm runs in a container,
+      # so no remote_dir.
+      root_dir: "/srv/misc/torrents"
+      # separate from the *arr recycle bin (.recycle, 14d) - both live in
+      # the torrent root; distinct names avoid confusion
+      recycle_bin: "/srv/misc/torrents/.qbm-recycle"
+      torrents_dir: "/qbittorrent/qBittorrent/BT_backup"
+
+    # cat: required by qbm v4.13 even with cat_update disabled (it validates
+    # the section is non-empty). Values = qBittorrent category save paths,
+    # as the pod/qbm views them (torrents mounted at /srv/misc/torrents).
+    # Library-root categories (Anime/Porn) point at pre-migration paths;
+    # only completed/* are actively written by the *arr flow.
+    cat:
+      Movies: "/srv/misc/torrents/completed/movies"
+      TV: "/srv/misc/torrents/completed/tv"
+      anime-sonarr: "/srv/misc/torrents/completed/anime"
+      Anime: "/srv/Media/Anime"
+      Porn: "/srv/Media/Porn"
+      manual: "/srv/misc/torrents/completed/manual"
+
+    # nohardlinks: check these *arr-managed categories for library links.
+    # (qBittorrent categories Movies/TV/anime-sonarr = the *arr save paths).
+    # LEGACY categories Anime (137 torrents) and Porn are deliberately NOT
+    # listed: their stale pre-migration savePaths point INTO the library
+    # dirs (/srv/Media/Anime, /srv/Media/Porn) - the torrent files ARE the
+    # library files there; qbm would tag+cleanup library content itself.
+    # Default share-limits group leaves them unlimited (seed forever).
+    # ignore_root_dir: true (default) - only links OUTSIDE the torrent root
+    # (i.e. into Movies/TV/Anime libraries) count as "in library".
+    # NOTE: qbm uses the LARGEST-FILE heuristic for multi-file torrents: a
+    # season pack whose biggest episode is unlinked gets tagged noHL even
+    # if other episodes are still linked (coarser than per-file; the
+    # qbit-cleanup.sh report covers the difference).
+    nohardlinks:
+      Movies:
+        ignore_root_dir: true
+      TV:
+        ignore_root_dir: true
+      anime-sonarr:
+        ignore_root_dir: true
+
+    share_limits:
+      # noHL = payload not in any library. Semantics: seed at least 14d
+      # total (min_seeding_time), at most 14d (max_seeding_time) - so an
+      # old torrent whose library copy vanished is removed on the next
+      # run, a fresh supersession gets up to 14 more days of seeding,
+      # tracker etiquette is respected either way.
+      noHL:
+        priority: 1
+        include_all_tags:
+          - noHL
+        # qbm requires max_ratio > 0 with min_seeding_time set. Ratio is
+        # effectively inert here: min_seeding_time (14d) prevents any
+        # deletion before it is met, so a noHL torrent always seeds 14d
+        # total - max_seeding_time (14d) then caps it.
+        max_ratio: 2.0
+        max_seeding_time: 14d
+        min_seeding_time: 14d
+        # Stop (pause) when the limit hits; qbm's own cleanup then deletes
+        # through the recycle bin. Must NOT be Remove/RemoveWithContent
+        # with cleanup: true (qbm rejects that combo; it would bypass the
+        # recycle bin).
+        share_limit_action: Stop
+        cleanup: True
+      # everything else (library-linked, seeding): NO limits - seed
+      # forever, per owner intent. This group resets any limits.
+      default:
+        priority: 999
+        max_ratio: -1
+        max_seeding_time: -1
+        cleanup: False
+        share_limit_action: Default
+
+    recyclebin:
+      enabled: True
+      empty_after_x_days: 14   # matches the *arr recycle bin window
+      save_torrents: True      # keep .torrent/.fastresume copies for re-add
+      split_by_category: False
+
+    orphaned:
+      # rem_orphaned is off (see commands); config kept for a later review
+      empty_after_x_days: 60
+      min_file_age_minutes: 30
+      exclude_patterns:
+        - "**/.RecycleBin/**"
+        - "**/.recycle/**"
+        - "**/.qbm-recycle/**"
+        - "**/*.!qB"
+      max_orphaned_files_to_delete: 50
