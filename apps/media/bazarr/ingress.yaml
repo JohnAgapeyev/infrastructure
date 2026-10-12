@@ -4,8 +4,13 @@ metadata:
   name: bazarr
   namespace: media
 spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed. HTTP->HTTPS redirect at Traefik.
+  tls:
+    - hosts:
+        - bazarr.home.jg-a.com
   rules:
-    - host: bazarr.lan
+    - host: bazarr.home.jg-a.com
       http:
         paths:
           - path: /

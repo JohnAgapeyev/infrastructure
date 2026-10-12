@@ -65,7 +65,7 @@ Matter health at any time:
 
 Home automation (Phase 9): Home Assistant runs in k3s and is VERIFIED
 (2026-09-30: desktop+mobile login, Matter toggles, recorder writing to the
-migrated DB). It is served at http://ha.lan and http://nas:8123
+migrated DB). It is served at https://ha.home.jg-a.com and http://nas:8123
 (`apps/home/home-assistant`, hostNetwork). matter-server ALSO runs in k3s
 since 2026-09-30 (`apps/home/matter-server`, hostNetwork; fabric at
 `/srv/appdata/matter-server`; HA connects over localhost:5580 like in
@@ -77,9 +77,9 @@ Both Docker containers (`homeassistant`, `matter-server`) are stopped and
 kept as rollback until ~2026-10-14: scale the deploy to 0, then
 `cd /srv/homeassistant && docker compose start <service>` (use
 http://nas:8123 for HA while rolled back; the Docker copy has no
-trusted_proxies, so ha.lan would 400). Their config dirs were never
+trusted_proxies, so ha.home.jg-a.com would 400). Their config dirs were never
 modified (rsync copies only; covered by the nightly snapshot + rclone
-jobs). `ha.lan` needs HA's `http: trusted_proxies: [10.42.0.0/16]` (in the
+jobs). `ha.home.jg-a.com` needs HA's `http: trusted_proxies: [10.42.0.0/16]` (in the
 migrated `configuration.yaml`); without it HA answers 400 to Traefik.
 
 ## k3s vs Arch packages (never fight pacman with k3s)
@@ -146,12 +146,12 @@ HA/matter together).
 
 ## Monitoring & alerting
 
-- Prometheus targets: http://prometheus.lan (all ServiceMonitors picked up
+- Prometheus targets: https://prometheus.home.jg-a.com (all ServiceMonitors picked up
   by design - selector is empty).
-- Grafana: http://grafana.lan (admin creds in `secrets/grafana.env`;
+- Grafana: https://grafana.home.jg-a.com (admin creds in `secrets/grafana.env`;
   dashboards load automatically from `apps/observability/dashboards/`
   ConfigMaps - edit there, or import in the UI then export back).
-- Alertmanager: http://alertmanager.lan - currently ONE null receiver (all
+- Alertmanager: https://alertmanager.home.jg-a.com - currently ONE null receiver (all
   alerts visible in the UI only; nothing phones anyone). Adding phone/email
   receivers later is a values-only change in
   `apps/observability/kube-prometheus-stack/values.yaml`.
@@ -159,6 +159,10 @@ HA/matter together).
   (mdadm failed disks, /srv < 500 GB free, SMART unhealthy,
   MediaServiceDown for 10m; home: MatterServerRestarting,
   MatterNodesUnavailable, MatterServerUnreachable, HomeAssistantDown).
+- TLS rules: `apps/observability/rules/cert-manager.yaml`
+  (CertificateNotReady, CertificateExpiringSoon <14d,
+  CertificateScrapeMissing; metrics scraped via
+  `apps/observability/exporters/cert-manager.yaml`). See [tls.md](tls.md).
 - Matter semantics (phase 9): `matter-exporter`
   (`apps/observability/exporters/matter.yaml`, scrapes the WS API at
   10.0.0.4:5580 like health.py) exports `matter_up`, `matter_nodes`,
@@ -184,18 +188,18 @@ HA/matter together).
 
 | App | URL | Legacy |
 |---|---|---|
-| qBittorrent | http://qbit.lan | http://nas:8080 |
-| Jellyfin | http://jellyfin.lan | http://nas:8096 |
-| Prowlarr | http://prowlarr.lan | |
-| Radarr | http://radarr.lan | |
-| Sonarr | http://sonarr.lan | |
-| Bazarr | http://bazarr.lan | |
-| Seerr | http://seerr.lan | |
-| Shoko | http://shoko.lan/webui/ | |
-| Grafana | http://grafana.lan | |
-| Prometheus | http://prometheus.lan | |
-| Alertmanager | http://alertmanager.lan | |
-| Home Assistant | http://ha.lan | http://nas:8123 |
+| qBittorrent | https://qbit.home.jg-a.com | http://nas:8080 |
+| Jellyfin | https://jellyfin.home.jg-a.com | http://nas:8096 |
+| Prowlarr | https://prowlarr.home.jg-a.com | |
+| Radarr | https://radarr.home.jg-a.com | |
+| Sonarr | https://sonarr.home.jg-a.com | |
+| Bazarr | https://bazarr.home.jg-a.com | |
+| Seerr | https://seerr.home.jg-a.com | |
+| Shoko | https://shoko.home.jg-a.com/webui/ | |
+| Grafana | https://grafana.home.jg-a.com | |
+| Prometheus | https://prometheus.home.jg-a.com | |
+| Alertmanager | https://alertmanager.home.jg-a.com | |
+| Home Assistant | https://ha.home.jg-a.com | http://nas:8123 |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
 apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
@@ -213,8 +217,8 @@ apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
   endpoints.
 - systemd-resolved caches negative DNS answers: right after adding an
   Unbound host override the host itself may still serve the old NXDOMAIN
-  for a while (`getent hosts ha.lan` empty). Query OPNsense directly to
-  check the record: `nslookup ha.lan 10.0.0.2` from a busybox pod.
+  for a while (`getent hosts ha.home.jg-a.com` empty). Query OPNsense directly to
+  check the record: `nslookup ha.home.jg-a.com 10.0.0.2` from a busybox pod.
 - Home Assistant's habluetooth "Missing NET_ADMIN/NET_RAW capabilities"
   ERROR appears on every start, including in Docker - Bluetooth is not in
   use (no bluetooth config entry, no dbus mount); ignore it.
@@ -236,4 +240,4 @@ apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
   hostNetwork pods the pod IP is the node IP, so a selector Service gets
   the right endpoints. This is why apps/home/home-assistant/service.yaml
   uses a selector (during a Docker rollback its endpoints vanish - use
-  http://nas:8123 then; ha.lan 400s anyway without trusted_proxies).
+  http://nas:8123 then; ha.home.jg-a.com 400s anyway without trusted_proxies).

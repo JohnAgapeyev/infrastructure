@@ -18,8 +18,10 @@ kube-prometheus-stack:
       enabled: true
       ingressClassName: traefik
       hosts:
-        - prometheus.lan
+        - prometheus.home.jg-a.com
       paths: ["/"]
+      tls:
+        - hosts: [prometheus.home.jg-a.com]
     prometheusSpec:
       retention: 30d
       retentionSize: 40GB
@@ -81,8 +83,10 @@ kube-prometheus-stack:
       enabled: true
       ingressClassName: traefik
       hosts:
-        - grafana.lan
+        - grafana.home.jg-a.com
       path: "/"
+      tls:
+        - hosts: [grafana.home.jg-a.com]
 
   alertmanager:
     enabled: true
@@ -90,8 +94,10 @@ kube-prometheus-stack:
       enabled: true
       ingressClassName: traefik
       hosts:
-        - alertmanager.lan
+        - alertmanager.home.jg-a.com
       paths: ["/"]
+      tls:
+        - hosts: [alertmanager.home.jg-a.com]
     alertmanagerSpec:
       # hostPath via static PV/PVC (same operator constraint as prometheus)
       storage:

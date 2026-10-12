@@ -1,0 +1,54 @@
+# TLS/issuance alerts. LE certificate lifetimes shrink (64d from Feb 2027,
+# 45d from Feb 2028), so a failed renewal costs a larger fraction of the
+# cert's life every year - these alerts are the "automation worked last
+# night" check. cert-manager metrics are scraped via
+# apps/observability/exporters/cert-manager.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cert-manager-rules
+  namespace: observability
+  labels:
+    release: observability
+spec:
+  groups:
+    - name: tls
+      rules:
+        - alert: CertificateNotReady
+          # any owned Certificate failing issuance for 10m (LE dns01
+          # issuance incl. waitInsteadOfSelfCheck takes ~2-3m)
+          expr: certmanager_certificate_ready_status{condition="False"} == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Certificate {{ $labels.name }} failed to issue"
+            description: >-
+              cert-manager cannot issue/renew {{ $labels.name }} (namespace
+              {{ $labels.namespace }}). Check `kubectl describe certificate -n {{
+              $labels.namespace }} {{ $labels.name }}` and the ACME Order events.
+              Common cause: Cloudflare token expired/revoked (secrets/certmanager.env).
+        - alert: CertificateExpiringSoon
+          # renewal happens at ~2/3 of lifetime; anything < 21d means renewal
+          # failed repeatedly (or renewBefore is misconfigured)
+          expr: min(certmanager_certificate_expiration_timestamp_seconds - time()) < 1209600
+          for: 1h
+          labels:
+            severity: critical
+          annotations:
+            summary: "Certificate {{ $labels.name }} expires in < 14 days"
+            description: >-
+              {{ $labels.name }} (namespace {{ $labels.namespace }}) is close to
+              expiry but cert-manager has not replaced it - renewal is failing.
+              Check events on the Certificate and Order.
+        - alert: CertificateScrapeMissing
+          expr: absent(up{job="cert-manager"} == 1)
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "cert-manager metrics not scraped"
+            description: >-
+              Prometheus has no scrape target for the cert-manager controller -
+              either cert-manager is down or the ServiceMonitor in
+              apps/observability/exporters/cert-manager.yaml stopped matching.

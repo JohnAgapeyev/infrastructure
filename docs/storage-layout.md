@@ -161,4 +161,4 @@ Full capture: `/tmp/opencode/capture.txt` (redacted). Highlights:
 - [x] `/srv/Backups/migration-2026-09-13/{appstate.tgz,matter-fabric-copy}`
 - [x] capture.txt answers: P=41045, N=519, fastresume storage, paths, HA
       2025.12.4, matter digest
-- [ ] Unbound host overrides `<svc>.lan` -> 10.0.0.4 (user, OPNsense)
+- [ ] Unbound wildcard host override `*.home.jg-a.com` -> 10.0.0.4 (user, OPNsense; see tls.md)

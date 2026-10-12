@@ -12,3 +12,4 @@ by kustomize `secretGenerator` in the app kustomizations.
 | `bazarr.env` | `OPENSUBTITLES_USER`, `OPENSUBTITLES_PASS` | bazarr provider |
 | `shoko.env` | `SHOKO_USER`, `SHOKO_PASS`, `ANIDB_USER`, `ANIDB_PASS` | shoko first run |
 | `grafana.env` | `admin-user`, `admin-password` | kube-prometheus-stack |
+| `certmanager.env` | `CLOUDFLARE_API_TOKEN` | cert-manager dns01 solver (wildcard `*.home.jg-a.com`) |

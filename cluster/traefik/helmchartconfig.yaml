@@ -1,0 +1,48 @@
+# k3s packaged Traefik is configured by merging this HelmChartConfig into the
+# bundled helm chart values (chart 40.1.4+up40.1.0 / Traefik 3.7.8 at time of
+# writing). Changes here trigger a traefik helm upgrade job automatically.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    # TLS: serve the cert-managed wildcard as the DEFAULT certificate for
+    # every TLS router (all *.home.jg-a.com Ingresses). The chart creates a
+    # TLSStore CRD named `default` in this release namespace (kube-system);
+    # the referenced Secret must be in the same namespace - hence the
+    # wildcard-home-jga Certificate targets kube-system.
+    #
+    # NOTE: this is the ONLY HelmChartConfig for the k3s bundled Traefik in
+    # the repo (HelmChartConfig is a singleton by name; two manifests would
+    # silently clobber each other on apply). Traefik metrics values used to
+    # live in apps/observability/exporters/jellyfin-traefik.yaml; they are
+    # consolidated here.
+    tlsStore:
+      default:
+        defaultCertificate:
+          secretName: wildcard-tls
+    metrics:
+      prometheus:
+        enabled: true
+        serviceMonitor:
+          enabled: true
+          namespace: observability
+          interval: 30s
+          metricRelabelings:
+            - action: drop
+              regex: traefik_entrtpoint_request_duration_seconds_bucket
+              sourceLabels: [__name__]
+    ports:
+      web:
+        # HTTP -> HTTPS on every host (no plaintext vhosts remain; legacy
+        # host ports 8096/8080 are unchanged, they bypass Traefik).
+        # NOTE: the chart path is ports.web.HTTP.redirections (redirections
+        # sits under the `http` key, not directly under the port).
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true

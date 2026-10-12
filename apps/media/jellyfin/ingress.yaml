@@ -4,8 +4,13 @@ metadata:
   name: jellyfin
   namespace: media
 spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed. HTTP->HTTPS redirect at Traefik.
+  tls:
+    - hosts:
+        - jellyfin.home.jg-a.com
   rules:
-    - host: jellyfin.lan
+    - host: jellyfin.home.jg-a.com
       http:
         paths:
           - path: /

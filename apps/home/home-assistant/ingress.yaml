@@ -4,8 +4,13 @@ metadata:
   name: home-assistant
   namespace: home
 spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed. HTTP->HTTPS redirect at Traefik.
+  tls:
+    - hosts:
+        - ha.home.jg-a.com
   rules:
-    - host: ha.lan
+    - host: ha.home.jg-a.com
       http:
         paths:
           - path: /

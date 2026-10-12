@@ -34,10 +34,10 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
    or a plain copy of the snapshot.
 5. `make apply-cluster && make apply-all`
    (kustomize first for namespaces + grafana-admin secret; then helm
-   observability). Unbound host overrides (see PLAN 3.4) for `*.lan`.
+   observability). Unbound wildcard host override `*.home.jg-a.com` -> 10.0.0.4 (see tls.md); `make install-cert-manager` before `make apply-cluster` for cert-manager CRDs.
 6. Verify: `kubectl get pods -A`; log into Jellyfin/Radarr/Sonarr;
    ./scripts/qbit-verify-paths.sh (torrent count 519); browse
-   http://grafana.lan.
+   https://grafana.home.jg-a.com.
 
 ## Rehearsal (done 2026-09-14, with Prowlarr)
 

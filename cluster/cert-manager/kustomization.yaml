@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# TLS chain: Cloudflare DNS-01 -> Let's Encrypt wildcard for *.home.jg-a.com
+# -> Traefik default cert. See docs/tls.md.
+#
+# Applied through cluster/ (make apply-cluster), which renders with
+# --load-restrictor=LoadRestrictionsNone so this kustomization can pull the
+# gitignored token file from the repo-root secrets/ dir.
+resources:
+  - cluster-issuer.yaml
+  - certificate.yaml
+secretGenerator:
+  - name: cloudflare-api-token
+    namespace: cert-manager
+    env: ../../secrets/certmanager.env
+    type: Opaque
+generatorOptions:
+  disableNameSuffixHash: true

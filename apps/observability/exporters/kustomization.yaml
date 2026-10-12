@@ -6,6 +6,7 @@ resources:
   - qbittorrent.yaml
   - jellyfin-traefik.yaml
   - matter.yaml
+  - cert-manager.yaml
   # 9c (HA /api/prometheus scrape) - activated 2026-09-30: token in
   # secrets/homeassistant.env, prometheus: block in the migrated HA
   # configuration.yaml (bootstrap/host/phase9c-ha-metrics.sh), HA restarted.

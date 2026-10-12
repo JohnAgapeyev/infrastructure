@@ -4,8 +4,13 @@ metadata:
   name: shoko
   namespace: media
 spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed. HTTP->HTTPS redirect at Traefik.
+  tls:
+    - hosts:
+        - shoko.home.jg-a.com
   rules:
-    - host: shoko.lan
+    - host: shoko.home.jg-a.com
       http:
         paths:
           - path: /

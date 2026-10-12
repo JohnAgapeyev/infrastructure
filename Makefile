@@ -1,4 +1,4 @@
-.PHONY: status logs restart apply-cluster apply-media apply-home apply-observability apply-all
+.PHONY: status logs restart apply-cluster install-cert-manager apply-media apply-home apply-observability apply-all
 
 # NOTE: apps/* kustomizations reference repo-root secrets/ via
 # secretGenerator, which requires LoadRestrictionsNone. `kubectl apply -k`
@@ -15,7 +15,12 @@ restart:
 	./scripts/restart.sh
 
 apply-cluster:
-	kubectl apply -k cluster/
+	# cert-manager/ kustomization pulls ../../secrets/*.env via
+	# secretGenerator -> needs LoadRestrictionsNone (see NOTE above)
+	$(KUSTOMIZE) cluster/ | kubectl apply -f -
+
+install-cert-manager:
+	./scripts/install-cert-manager.sh
 
 apply-media:
 	$(KUSTOMIZE) apps/media | kubectl apply -f -

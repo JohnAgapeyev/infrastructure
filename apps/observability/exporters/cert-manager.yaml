@@ -1,0 +1,55 @@
+# cert-manager metrics (controller + cainjector + webhook) for Prometheus.
+# cert-manager itself is installed from the pinned upstream manifest by
+# scripts/install-cert-manager.sh, so its ServiceMonitor lives here rather
+# than with the cluster/cert-manager/ resources.
+# Prometheus selects ALL ServiceMonitors cluster-wide (values.yaml:
+# serviceMonitorSelectorNilUsesHelmValues: false), so this one in the
+# observability namespace reaches pods in cert-manager via
+# namespaceSelector.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager-controller
+  namespace: observability
+  labels:
+    app: cert-manager
+spec:
+  namespaceSelector:
+    matchNames: [cert-manager]
+  selector:
+    matchLabels: { app: cert-manager }
+  endpoints:
+    - port: http-metrics
+      interval: 60s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager-cainjector
+  namespace: observability
+  labels:
+    app: cert-manager
+spec:
+  namespaceSelector:
+    matchNames: [cert-manager]
+  selector:
+    matchLabels: { app: cainjector }
+  endpoints:
+    - port: http-metrics
+      interval: 60s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager-webhook
+  namespace: observability
+  labels:
+    app: cert-manager
+spec:
+  namespaceSelector:
+    matchNames: [cert-manager]
+  selector:
+    matchLabels: { app: webhook }
+  endpoints:
+    - port: metrics
+      interval: 60s

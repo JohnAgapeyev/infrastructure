@@ -1,0 +1,32 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    # Production: real certs, 5 failed validations/hour/account rate limit.
+    # Debug issuance against https://acme-staging-v02.api.letsencrypt.org/directory
+    # first if needed, then switch back.
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: john@jg-a.com
+    # ACME account key (created automatically, one per issuer)
+    privateKeySecretRef:
+      name: letsencrypt-account-key
+    solvers:
+      # waitInsteadOfSelfCheck sits at solver level (sibling of dns01) per CRD.
+      - waitInsteadOfSelfCheck: 2m
+        dns01:
+          # Token: Cloudflare "API Token" (NOT the Global API Key), scoped
+          # Zone > DNS > Edit + Zone > Zone > Read on jg-a.com only.
+          # See secrets/certmanager.env.example / docs/tls.md.
+          # Split-horizon: OPNsense Unbound's wildcard host override
+          # (*.home.jg-a.com -> 10.0.0.4) shadows TXT lookups for
+          # _acme-challenge.home.jg-a.com from the cluster resolver
+          # (NODATA instead of the real record via Cloudflare), so
+          # cert-manager's self-check can never pass. The solver-level
+          # waitInsteadOfSelfCheck above skips it and lets Let's Encrypt
+          # validate after a fixed wait instead.
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: CLOUDFLARE_API_TOKEN

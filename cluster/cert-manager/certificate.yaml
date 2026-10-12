@@ -1,0 +1,23 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  # kube-system on purpose: the resulting wildcard-tls Secret must live in
+  # Traefik's own namespace for the TLSStore defaultCertificate reference
+  # (see cluster/traefik/helmchartconfig.yaml) - k3s runs Traefik in
+  # kube-system.
+  name: wildcard-home-jga
+  namespace: kube-system
+spec:
+  # Apex + wildcard: *.home.jg-a.com alone does NOT cover home.jg-a.com.
+  dnsNames:
+    - home.jg-a.com
+    - "*.home.jg-a.com"
+  secretName: wildcard-tls
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer
+  # No explicit renewBefore: cert-manager renews ~2/3 through each cert's
+  # actual lifetime and recomputes it from notBefore/notAfter of every new
+  # issuance, so the LE lifetime reductions (64d in Feb 2027, 45d in Feb
+  # 2028) need no change here. ACMEUseARI (see scripts/install-cert-manager.sh)
+  # lets the CA override the renewal window when needed.

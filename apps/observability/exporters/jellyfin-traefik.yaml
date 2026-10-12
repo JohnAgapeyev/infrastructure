@@ -10,24 +10,8 @@ spec:
     matchLabels: { app: jellyfin }
   endpoints:
     - { port: http, path: /metrics, interval: 60s }
----
 # Seerr has no /metrics; exposed via its own health only (up via kube probes).
-# Traefik metrics: enabled via HelmChartConfig below.
-apiVersion: helm.cattle.io/v1
-kind: HelmChartConfig
-metadata:
-  name: traefik
-  namespace: kube-system
-spec:
-  valuesContent: |-
-    metrics:
-      prometheus:
-        enabled: true
-        serviceMonitor:
-          enabled: true
-          namespace: observability
-          interval: 30s
-          metricRelabelings:
-            - action: drop
-              regex: traefik_entrtpoint_request_duration_seconds_bucket
-              sourceLabels: [__name__]
+# Traefik metrics (prometheus serviceMonitor, dropped duration histogram):
+# configured via the consolidated HelmChartConfig in
+# cluster/traefik/helmchartconfig.yaml (the HelmChartConfig is a singleton
+# per chart; it must live in exactly one repo location).

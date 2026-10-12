@@ -17,8 +17,11 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   touches media (hardlinks require torrent dir and library dir on the same
   mount). qBittorrent additionally mounts `/srv/Media/Torrents` at
   `/srv/misc/torrents` for fastresume path compatibility.
-- **Ingress**: bundled Traefik, plain HTTP, hostnames `<svc>.lan` resolved via
-  OPNsense Unbound host overrides -> 10.0.0.4. Legacy host ports 8096
+- **Ingress**: bundled Traefik, TLS via a Let's Encrypt wildcard for
+  `*.home.jg-a.com` (cert-manager DNS-01 against Cloudflare) installed as
+  Traefik's default certificate; hostnames `<slug>.home.jg-a.com` resolved
+  via OPNsense Unbound wildcard host override `*` -> 10.0.0.4. Split DNS,
+  renewal and ops detail: [tls.md](tls.md). Legacy host ports 8096
   (Jellyfin) and 8080 (qBittorrent WebUI) are kept via LoadBalancer services
   (klipper); the qBittorrent BT port is a pod `hostPort`.
 - **Users/permissions**: pods run as the same UIDs as the legacy systemd
@@ -43,6 +46,7 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
 | shoko (+ shokofin plugin) | anime metadata (AniDB) | `ghcr.io/shokoanime/server` |
 | home-assistant / matter-server | smarthome (Phase 9) | `ghcr.io/home-assistant/*`, `ghcr.io/matter-js/*` |
 | kube-prometheus-stack | metrics/alerts/dashboards | umbrella chart in `apps/observability/` |
+| cert-manager | TLS issuance (LE wildcard via Cloudflare DNS-01) | `v1.21.2` pinned, `scripts/install-cert-manager.sh` |
 
 Samba stays on the host (shares point into `/srv/Media`), as does the
 rclone -> Backblaze B2 backup pipeline (extended to cover `/srv/appdata`).

@@ -4,8 +4,13 @@ metadata:
   name: prowlarr
   namespace: media
 spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed. HTTP->HTTPS redirect at Traefik.
+  tls:
+    - hosts:
+        - prowlarr.home.jg-a.com
   rules:
-    - host: prowlarr.lan
+    - host: prowlarr.home.jg-a.com
       http:
         paths:
           - path: /
