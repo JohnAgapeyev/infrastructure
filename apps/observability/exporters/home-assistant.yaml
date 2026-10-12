@@ -2,7 +2,7 @@
 # (long-lived access token). Selects the (pod-selector) Service in
 # apps/home/home-assistant/service.yaml: the hostNetwork pod's IP is
 # 10.0.0.4, so the operator discovers endpoint 10.0.0.4:8123 - the same
-# address the ha.lan ingress uses.
+# address the https://ha.home.jg-a.com ingress terminates TLS at.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:

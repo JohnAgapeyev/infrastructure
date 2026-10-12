@@ -83,6 +83,18 @@ No cert, no Traefik config, no DNS change.
 
 ## Troubleshooting
 
+- Media NetworkPolicy: default-deny with explicit allows
+  (`cluster/network-policies/media.yaml`). k3s REJECTs denied egress
+  (~1ms "connection refused" - a 1ms refused means local policy, an
+  RTT-scale refused means the remote host). If a media app cannot reach
+  something new: add the flow to the policy, do NOT delete the
+  default-deny. Note: jellyfin DLNA/SSDP (UDP 1900) egress is denied -
+  add a UDP-1900 allow if DLNA casting is ever needed.
+- seerr's Radarr/Sonarr `externalUrl` + API connections are HOST STATE in
+  `/srv/appdata/seerr/settings.json` (not in this repo) - after domain
+  changes, fix them via the seerr UI (or stop seerr, edit the json,
+  restart) or its deep links will 404/NXDOMAIN.
+
 - `kubectl get certificate -A` / `kubectl get challenges -A` -
   Ready must be True; last issued cert in `wildcard-tls`
   (`kubectl -n kube-system get secret wildcard-tls -o jsonpath='{.data ca\.crt}'` absent is normal;

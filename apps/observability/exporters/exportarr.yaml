@@ -99,7 +99,10 @@ spec:
   selector:
     matchLabels: { app: exportarr-sonarr }
   endpoints:
-    - { port: http, interval: 60s }
+    # ENABLE_ADDITIONAL_METRICS makes each /metrics poll sweep sonarr's
+    # whole TV API; on this library that regularly exceeds the 10s default
+    # scrape timeout (target flapped up/down for weeks before 2026-10-12).
+    - { port: http, interval: 60s, scrapeTimeout: 45s }
 ---
 apiVersion: apps/v1
 kind: Deployment

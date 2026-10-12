@@ -4,3 +4,4 @@ resources:
   - namespaces.yaml
   - cert-manager
   - traefik
+  - network-policies

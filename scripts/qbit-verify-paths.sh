@@ -66,7 +66,7 @@ while IFS= read -r p; do
 done
 
 echo "== WebUI endpoints =="
-for u in "http://nas:8080" "http://qbit.lan"; do
+for u in "http://nas:8080" "https://qbit.home.jg-a.com"; do
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$u/")
   echo "$u -> $code"
 done

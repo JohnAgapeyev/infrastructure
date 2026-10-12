@@ -32,7 +32,7 @@ check "resolv.conf -> resolved stub"       bash -c 'readlink /etc/resolv.conf | 
 check "enp5s0 DNS server 10.0.0.2"         bash -c 'resolvectl dns enp5s0 | grep -q 10.0.0.2'
 check "search domain lan"                  bash -c 'resolvectl domain enp5s0 | grep -qw lan'
 check "resolved mDNS/LLMNR off"            bash -c 'resolvectl status | grep -E "^ *Protocols:" | head -1 | grep -q -- "-LLMNR -mDNS"'
-check "host: jellyfin.lan -> 10.0.0.4"     bash -c 'getent hosts jellyfin.lan | grep -q "^10.0.0.4 "'
+check "host: jellyfin.home.jg-a.com -> 10.0.0.4"  bash -c 'getent hosts jellyfin.home.jg-a.com | grep -q "^10.0.0.4 "'
 check "host: github.com resolves"          getent hosts github.com
 check "pod: github.com resolves"           kubectl -n media exec deploy/jellyfin -- getent hosts github.com
 check "pod: cluster DNS works"             kubectl -n media exec deploy/jellyfin -- getent hosts radarr.media.svc.cluster.local

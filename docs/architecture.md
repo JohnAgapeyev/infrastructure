@@ -30,6 +30,11 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   stateful app.
 - **Secrets**: gitignored `secrets/*.env` consumed by kustomize
   `secretGenerator`; committed `*.env.example` files document the keys.
+- **Network policy**: default-deny (ingress+egress) with explicit allows
+  in `cluster/network-policies/media.yaml` (inter-service, DNS, LAN,
+  traefik/observability namespaces, per-app internet egress; BT port
+  41045 open for torrent peers). home ns is hostNetwork - policies never
+  apply there.
 
 ## Services
 

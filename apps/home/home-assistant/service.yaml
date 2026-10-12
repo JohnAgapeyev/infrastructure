@@ -12,8 +12,8 @@ spec:
   # v1 Endpoints; a selectorless Service with only a hand-written
   # EndpointSlice produces NO scrape target - hit 2026-09-30).
   # During a Docker rollback (deploy scaled to 0) endpoints vanish and
-  # ha.lan stops routing - use http://nas:8123 then (ha.lan 400s anyway:
-  # the Docker config has no trusted_proxies).
+  # ha.home.jg-a.com stops routing - use http://nas:8123 then (it 400s
+  # anyway: the Docker config has no trusted_proxies).
   selector: { app: home-assistant }
   type: ClusterIP
   ports:

@@ -22,7 +22,7 @@ spec:
           image: jellyfin/jellyfin:10.11.11
           env:
             - { name: TZ, value: America/Vancouver }
-            - { name: JELLYFIN_PublishedServerUrl, value: "http://jellyfin.lan" }
+            - { name: JELLYFIN_PublishedServerUrl, value: "https://jellyfin.home.jg-a.com" }
           ports:
             - name: http
               containerPort: 8096

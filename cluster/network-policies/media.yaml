@@ -1,0 +1,182 @@
+# Default-deny + explicit allows for the media namespace.
+#
+# Threat model: a compromised media pod pivoting to other cluster services
+# (API server, observability secrets) or LAN. In-cluster TLS does not help
+# here (pods read their own Secret mounts); this is the cheap control that
+# actually bounds the blast radius. k3s enforces these via its bundled
+# network policy controller (flannel + kube-router policy engine).
+#
+# Flow inventory this encodes (verified against the live cluster):
+#   egress, all pods:
+#     - DNS            kube-dns (kube-system), UDP/TCP 53
+#     - same-namespace  seerr->radarr/sonarr/jellyfin, prowlarr->flaresolverr,
+#                      recyclarr->radarr/sonarr, unpackerr->radarr/sonarr
+#     - internet :80/:443  prowlarr (indexers), radarr/sonarr (lists),
+#                      bazarr (opensubtitles), seerr (TMDB), jellyfin
+#                      (update check), shoko (AniDB HTTP)
+#   egress, shoko only: AniDB UDP/9000
+#   egress, qbittorrent + flaresolverr: UNRESTRICTED internet - torrent
+#     peer traffic uses arbitrary ports; flaresolverr fetches arbitrary
+#     indexer sites. Private ranges stay excluded (no cluster/LAN pivot).
+#   ingress, all pods:
+#     - same-namespace (inter-service calls above)
+#     - observability  prometheus scrapes + exportarr x4
+#     - kube-system    traefik (Ingress proxying)
+#     - LAN 10.0.0.0/24  klipper servicelb DNATs (jellyfin 8096, qbit 8080)
+#                      preserve the client source IP
+#   ingress, qbittorrent only: BT port 41045 TCP+UDP from the internet
+#     (pod hostPort; incoming torrent peers)
+#
+# Known limitations (accepted):
+#   - home ns (home-assistant, matter-server) is hostNetwork; NetworkPolicy
+#     never applies to hostNetwork pods. media policy is the useful part.
+#   - jellyfin SSDP/DLNA discovery (UDP multicast 1900) egress is blocked;
+#     re-enable with a UDP-1900 allow if DLNA casting is ever needed.
+#   - policies are stateful: replies to allowed egress need no ingress rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-default-deny
+  namespace: media
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# DNS egress for every media pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-egress-dns
+  namespace: media
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Inter-service (same-ns) egress + standard web-ports internet egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-egress-services-and-web
+  namespace: media
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    # same-namespace pods (seerr/prowlarr/recyclarr/unpackerr calls)
+    - to:
+        - podSelector: {}
+    # internet web traffic; private ranges excluded so a compromised pod
+    # cannot pivot to the pod/service CIDR, LAN, or the API server.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8      # LAN + pod (10.42/16) + service (10.43/16) CIDRs
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 224.0.0.0/4     # multicast (incl. SSDP - see header note)
+      ports:
+        - { protocol: TCP, port: 80 }
+        - { protocol: TCP, port: 443 }
+---
+# AniDB UDP API (shoko).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-egress-anidb
+  namespace: media
+spec:
+  podSelector:
+    matchLabels: { app: shoko }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - { protocol: UDP, port: 9000 }
+---
+# Unrestricted internet egress: qbittorrent (peer traffic on arbitrary
+# ports) and flaresolverr (fetches arbitrary indexer sites).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-egress-internet-full
+  namespace: media
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [qbittorrent, flaresolverr] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+---
+# Ingress: same-ns, observability (prometheus/exportarr), kube-system
+# (traefik), and LAN (klipper hostIP DNAT preserves client source IP).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-ingress-allowed
+  namespace: media
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: observability }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+        - ipBlock:
+            cidr: 10.0.0.0/24
+---
+# Incoming torrent peers: hostPort 41045 is DNAT'd to the pod with the
+# peer's real source IP (not covered by the LAN/namespace allows).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-ingress-bittorrent
+  namespace: media
+spec:
+  podSelector:
+    matchLabels: { app: qbittorrent }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - { protocol: TCP, port: 41045 }
+        - { protocol: UDP, port: 41045 }
