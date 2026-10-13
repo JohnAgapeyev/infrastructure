@@ -1,4 +1,4 @@
-.PHONY: status logs restart apply-cluster install-cert-manager apply-media apply-home apply-observability apply-all
+.PHONY: status logs restart apply-cluster install-cert-manager apply-media apply-home apply-observability apply-cloud apply-all
 
 # NOTE: apps/* kustomizations reference repo-root secrets/ via
 # secretGenerator, which requires LoadRestrictionsNone. `kubectl apply -k`
@@ -28,6 +28,9 @@ apply-media:
 apply-home:
 	$(KUSTOMIZE) apps/home | kubectl apply -f -
 
+apply-cloud:
+	$(KUSTOMIZE) apps/cloud | kubectl apply -f -
+
 # Observability is a Helm umbrella chart + kustomize exporters/dashboards/rules
 apply-observability:
 	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/kube-prometheus-stack | kubectl apply -f -
@@ -44,4 +47,4 @@ apply-observability:
 	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/dashboards | kubectl apply --server-side --force-conflicts -f -
 	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/rules | kubectl apply -f -
 
-apply-all: apply-cluster apply-media apply-home apply-observability
+apply-all: apply-cluster apply-media apply-home apply-cloud apply-observability

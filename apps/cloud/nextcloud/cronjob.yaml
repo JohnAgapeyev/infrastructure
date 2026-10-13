@@ -1,0 +1,43 @@
+# Background jobs via the container's cron.php (recommended over AJAX).
+# Runs as www-data (33) directly via securityContext - no sudo needed.
+# Label app: nextcloud-cron, NOT app: nextcloud, so the nextcloud Service
+# selector never adds cron pod IPs as endpoints (Traefik would
+# intermittently route a request into a pod that is not a web server).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nextcloud-cron
+  namespace: cloud
+  labels: { app: nextcloud-cron }
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels: { app: nextcloud-cron }
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 33
+            runAsGroup: 33
+          containers:
+            - name: cron
+              image: nextcloud:35.0.1-apache
+              command: ["php", "/var/www/html/cron.php"]
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits: { memory: 512Mi }
+              volumeMounts:
+                - { name: config, mountPath: /var/www/html/config }
+                - { name: data, mountPath: /var/www/html/data }
+              # custom_apps is not needed: cron.php loads config.php
+              # (db/redis creds live there, not in env)
+          volumes:
+            - name: config
+              hostPath: { path: /srv/appdata/nextcloud/config, type: Directory }
+            - name: data
+              hostPath: { path: /srv/appdata/nextcloud-data, type: Directory }

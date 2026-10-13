@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: cloud
+  labels: { app: postgres }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          # debian variant, NOT -alpine: the alpine image's postgres user is
+          # uid 70 (Alpine distro convention); the Debian image uses 999,
+          # which is what /srv/appdata/postgres is chowned to
+          image: postgres:18.6
+          env:
+            - { name: POSTGRES_USER, value: nextcloud }
+            - { name: POSTGRES_DB, value: nextcloud }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nextcloud-db, key: POSTGRES_PASSWORD } }
+            # PGDATA in a subdir of the mount: initdb refuses a data dir
+            # that is not empty (lost+found after any fs repair, or other
+            # content) - the classic hostPath pattern
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nextcloud", "-d", "nextcloud"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "nextcloud", "-d", "nextcloud"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/postgres, type: Directory }

@@ -1,0 +1,112 @@
+# Default-deny + explicit allows for the cloud namespace (Nextcloud
+# stack). Same threat model and style as media.yaml: a compromised pod
+# pivoting to other cluster services or LAN; k3s enforces via its bundled
+# network policy controller.
+#
+# Flow inventory this encodes:
+#   egress, all pods:
+#     - DNS            kube-dns (kube-system), UDP/TCP 53
+#     - same-namespace  nextcloud->postgres:5432, nextcloud->redis:6379,
+#                      nextcloud-cron jobs -> postgres/redis (cron.php
+#                      reads db/redis creds from the mounted config.php)
+#   egress, nextcloud only: internet TCP 80/443 (app store, update
+#                      notifications, lookup server) + SMTP 587/465
+#                      (family password resets - SMTP_* creds land with
+#                      NC-5; the allow rules exist from day one)
+#   egress, redis + postgres: NO internet (nothing to fetch)
+#   ingress, all pods:
+#     - same-namespace (inter-service calls above)
+#     - observability  nextcloud-exporter scrapes the serverinfo API (NC-2;
+#                      the exporter pod lives in ns observability)
+#     - kube-system    traefik (Ingress proxying - ALL client traffic,
+#                      LAN and VPN alike, arrives via traefik)
+#   NOTE: no LAN 10.0.0.0/24 ipBlock allow (unlike media) - nothing here
+#   uses klipper LoadBalancer hostIP DNAT; every client goes through
+#   Traefik, so the kube-system namespace allow covers it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloud-default-deny
+  namespace: cloud
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# DNS egress for every cloud pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloud-egress-dns
+  namespace: cloud
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Same-namespace traffic (nextcloud <-> postgres/redis, cron jobs).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloud-egress-same-namespace
+  namespace: cloud
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {}
+---
+# Internet web + SMTP egress for the app pod only (NOT postgres/redis/
+# cron): app store, update checks, mail submission. Private ranges
+# excluded so a compromised pod cannot pivot to the pod/service CIDR,
+# LAN, or the API server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloud-egress-nextcloud-web-smtp
+  namespace: cloud
+spec:
+  podSelector:
+    matchLabels: { app: nextcloud }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8      # LAN + pod (10.42/16) + service (10.43/16) CIDRs
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - { protocol: TCP, port: 80 }
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 587 }
+        - { protocol: TCP, port: 465 }
+---
+# Ingress: same-ns, observability (exporter/prometheus), kube-system
+# (traefik). No LAN allow needed (see header note).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloud-ingress-allowed
+  namespace: cloud
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: observability }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }

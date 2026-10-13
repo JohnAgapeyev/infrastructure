@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nextcloud
+  namespace: cloud
+spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed. HTTP->HTTPS redirect at Traefik.
+  tls:
+    - hosts:
+        - nextcloud.home.jg-a.com
+  rules:
+    - host: nextcloud.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nextcloud
+                port: { number: 80 }

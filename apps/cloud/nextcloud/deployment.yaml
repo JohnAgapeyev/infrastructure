@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  namespace: cloud
+  labels: { app: nextcloud }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: nextcloud }
+  template:
+    metadata:
+      labels: { app: nextcloud }
+    spec:
+      # the first-run installer exits if postgres/redis are not answering
+      # yet; wait like the home apps wait for host networking (busybox
+      # precedent)
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -c
+            - until nc -z postgres.cloud.svc.cluster.local 5432 && nc -z redis.cloud.svc.cluster.local 6379; do echo waiting for postgres+redis; sleep 2; done
+      containers:
+        - name: nextcloud
+          image: nextcloud:35.0.1-apache
+          env:
+            # first-run autoinstall (config.php is created in the mounted
+            # config dir; envs only take effect while it is absent)
+            - name: NEXTCLOUD_ADMIN_USER
+              valueFrom: { secretKeyRef: { name: nextcloud-env, key: NEXTCLOUD_ADMIN_USER } }
+            - name: NEXTCLOUD_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: nextcloud-env, key: NEXTCLOUD_ADMIN_PASSWORD } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nextcloud-env, key: POSTGRES_PASSWORD } }
+            - { name: POSTGRES_HOST, value: "postgres.cloud.svc.cluster.local" }
+            - { name: POSTGRES_USER, value: nextcloud }
+            - { name: POSTGRES_DB, value: nextcloud }
+            - { name: REDIS_HOST, value: "redis.cloud.svc.cluster.local" }
+            - { name: NEXTCLOUD_TRUSTED_DOMAINS, value: "nextcloud.home.jg-a.com" }
+            # Traefik terminates TLS; without trusted_proxies NC sees every
+            # client as the Traefik pod IP (HA 400 lesson) and brute-force
+            # protection would throttle everyone as one address
+            - { name: TRUSTED_PROXIES, value: "10.42.0.0/16" }
+            - { name: OVERWRITECLIURL, value: "https://nextcloud.home.jg-a.com" }
+            - { name: OVERWRITEPROTOCOL, value: https }
+            - { name: PHP_UPLOAD_LIMIT, value: 10G }
+            - { name: TZ, value: America/Vancouver }
+          ports:
+            - { name: http, containerPort: 80 }
+          readinessProbe:
+            httpGet: { path: /status.php, port: 80 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /status.php, port: 80 }
+            initialDelaySeconds: 60
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - { name: config, mountPath: /var/www/html/config }
+            - { name: custom-apps, mountPath: /var/www/html/custom_apps }
+            - { name: data, mountPath: /var/www/html/data }
+      volumes:
+        # NEVER mount /var/www/html itself: the image owns it (an upgrade
+        # replaces the app code); only state subdirs are host-backed.
+        # Image runs apache as root master + www-data(33) workers -> dirs
+        # are 33:media (create-users.sh, grafana-472 precedent).
+        - name: config
+          hostPath: { path: /srv/appdata/nextcloud/config, type: Directory }
+        - name: custom-apps
+          hostPath: { path: /srv/appdata/nextcloud/custom_apps, type: Directory }
+        - name: data
+          hostPath: { path: /srv/appdata/nextcloud-data, type: Directory }
