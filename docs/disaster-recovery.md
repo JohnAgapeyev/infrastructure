@@ -55,7 +55,8 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
    ./scripts/qbit-verify-paths.sh (torrent count 519); browse
    https://grafana.home.jg-a.com and https://nextcloud.home.jg-a.com.
 
-## Rehearsal (done 2026-09-14, with Prowlarr)
+## Rehearsal (done 2026-09-14, with Prowlarr; re-run 2026-10-13 after the
+NC backup-pipeline changes: pg_dump leg + exclusion guards all PASS)
 
 - `rclone copy Backblaze:John-System-Backups/appdata/prowlarr <tmp>` ->
   compare with `/srv/appdata/prowlarr` (config.xml + db intact).
