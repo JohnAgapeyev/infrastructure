@@ -96,8 +96,39 @@ list = ceiling; until_quality (= the *arr cutoff) = what "done" means;
 until_score ("Upgrade Until Custom Format Score") = churn appetite.
 until_score 10000 = "any score improvement is worth a re-download" - that
 manufactured the partial-pack/missingFiles waste; new values cap it.
-Assign per movie/series in the *arr UI; HD->UHD Upgrade keeps its legacy
-name because it holds all pre-existing assignments.
+HD->UHD Upgrade keeps its legacy name because it predates the band split -
+it IS the remux band.
+
+### Library classification (2026-10-13)
+
+Radarr 277 movies: 26 on HD->UHD Upgrade (remux band, "deserves the best":
+Dune x2, Blade Runner 2049, Avatar x3, Titanic, Nolan Batman x2, Star Wars
+OT, HP x8, Interstellar, 2001, Apocalypse Now, Fight Club, Oppenheimer,
+Gladiator II); 22 on 1080p Good Enough (casual + prestige-but-not-spectacle
++ actively downgraded, see below); 229 on UHD Preferred (default: 4K if
+available, WEBDL cutoff, no remux churn).
+
+Sonarr 47 series: Anime Archive (finished, upgrades OFF, pack stays whole):
+AoT, Black Clover, Isekai Quartet, JoJo, Mob Psycho, Monogatari, Naruto,
+Shippuden, Redo of Healer. Anime (ongoing): One Piece, Dr. STONE, Demon
+Slayer, SPY x FAMILY, Apothecary, Mushoku, Goblin Slayer, Bleach, DMC.
+TV UHD Preferred (recent/prestige): GoT, House of Cards, The Flash, OITNB,
+Altered Carbon, The Witcher, Peaky Blinders. TV 1080p Good Enough: the 22
+back-catalog shows (Seinfeld, Friends, MASH, West Wing, Frasier, ...).
+
+### Active downgrades (2026-10-13)
+
+13 Good Enough titles holding 45-80G 4K remuxes (756G) were actively
+downgraded: profile -> 1080p Good Enough FIRST, then the 4K library file
+deleted via API, then MoviesSearch queued the 1080p regrab (~20G each).
+Amadeus, District 9, Get Out, A Clockwork Orange, Dead Poets Society,
+12 Angry Men, Equalizer 1-3, Super Mario Galaxy Movie, Twilight, Mean
+Girls, Fifty Shades. Sequence matters: delete-while-on-a-4K-band would
+regrab 4K. The old 4K torrent side (still seeding) gets noHL-tagged and
+moved to .qbm-recycle by the nightly run; recycle must be emptied
+(empty_after_x_days: 14) to actually reclaim the ~756G. Animation and
+superhero 4K remuxes were kept by owner decision (4K HDR animation +
+action spectacle is where 4K earns its size).
 
 | Band (both apps) | Ceiling | Cutoff | until_score | For |
 |---|---|---|---|---|
