@@ -44,7 +44,8 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
    Nextcloud DB: do NOT restore `postgres/` (it is not in B2 anyway) -
    `make apply-cloud` starts postgres with an EMPTY PGDATA, then import:
    `gunzip -c /srv/appdata/_snapshots/nextcloud/nextcloud.sql.gz |
-   kubectl -n cloud exec -i deploy/postgres -- psql -U nextcloud -d nextcloud`
+   kubectl -n cloud exec -i deploy/postgres -- psql -v ON_ERROR_STOP=1
+   -U nextcloud -d nextcloud`
    and `kubectl -n cloud exec deploy/nextcloud -- runuser -u www-data --
    php /var/www/html/occ files:scan --all`.
 5. `make apply-cluster && make apply-all`
@@ -79,9 +80,12 @@ Re-run the rehearsal after any change to the backup pipeline.
   restore `/srv/appdata/nextcloud` + `/srv/appdata/nextcloud-data` from
   B2; wipe `/srv/appdata/postgres` ONLY if the DB is what broke (it is NOT
   in B2 - recreate it empty); `make apply-cloud` (postgres comes up with
-  an empty PGDATA); import the dump:
+  an empty PGDATA); import the dump (no-owner format - loads cleanly into
+  a fresh cluster; ON_ERROR_STOP makes a partial import loud instead of
+  silent):
   `gunzip -c /srv/appdata/_snapshots/nextcloud/nextcloud.sql.gz |
-  kubectl -n cloud exec -i deploy/postgres -- psql -U nextcloud -d nextcloud`;
+  kubectl -n cloud exec -i deploy/postgres -- psql -v ON_ERROR_STOP=1
+  -U nextcloud -d nextcloud`;
   scale nextcloud back up; `occ files:scan --all` once Ready. Trashbin and
   file versions ride the data dir restore. If restoring into a RUNNING
   instance, `occ maintenance:mode --on` first.

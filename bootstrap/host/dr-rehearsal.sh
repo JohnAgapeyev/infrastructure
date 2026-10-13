@@ -46,7 +46,7 @@ for i in $(seq 1 30); do
   sleep 2
 done
 kubectl exec "$VERIFY_POD" -- psql -U postgres -c 'create database ncverify' >/dev/null
-gunzip -c "$WORK/snap-nextcloud/nextcloud.sql.gz" | kubectl exec -i "$VERIFY_POD" -- psql -U postgres -d ncverify -q >/dev/null
+gunzip -c "$WORK/snap-nextcloud/nextcloud.sql.gz" | kubectl exec -i "$VERIFY_POD" -- psql -U postgres -d ncverify -q -v ON_ERROR_STOP=1 >/dev/null
 echo "oc_users rows:    $(kubectl exec "$VERIFY_POD" -- psql -U postgres -d ncverify -t -A -c 'select count(*) from oc_users;')"
 echo "oc_storages rows: $(kubectl exec "$VERIFY_POD" -- psql -U postgres -d ncverify -t -A -c 'select count(*) from oc_storages;')"
 kubectl delete pod "$VERIFY_POD" --ignore-not-found >/dev/null
