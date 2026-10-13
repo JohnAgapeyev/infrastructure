@@ -19,7 +19,8 @@ data:
     # Scope deliberately minimal: no category/tracker tagging, no unregistered
     # removal, no orphaned scan (heavy on 16T; revisit later if wanted).
     commands:
-      dry_run: True          # flip to False after reviewing a run
+      dry_run: False         # live since 2026-10-12 (owner-approved after
+                             # verified dry run: 335 noHL, spot-checked)
       recheck: False         # NEVER enable: rechecks missingFiles torrents
       cat_update: False      #  -> re-downloads superseded releases
       tag_update: False
@@ -103,13 +104,16 @@ data:
         priority: 1
         include_all_tags:
           - noHL
-        # qbm requires max_ratio > 0 with min_seeding_time set. Ratio is
-        # effectively inert here: min_seeding_time (14d) prevents any
+        # Values are MINUTES (int bypasses the time-expression parser; in
+        # qbm 4.13.0 "14d" parsed as SECONDS -> an 840-day cleanup
+        # threshold, so the first live run only deleted multi-year-seeded
+        # torrents). qbm requires max_ratio > 0 with min_seeding_time set;
+        # ratio is inert: min_seeding_time (20160 min = 14d) prevents any
         # deletion before it is met, so a noHL torrent always seeds 14d
-        # total - max_seeding_time (14d) then caps it.
+        # total, then is cleaned up.
         max_ratio: 2.0
-        max_seeding_time: 14d
-        min_seeding_time: 14d
+        max_seeding_time: 20160
+        min_seeding_time: 20160
         # Stop (pause) when the limit hits; qbm's own cleanup then deletes
         # through the recycle bin. Must NOT be Remove/RemoveWithContent
         # with cleanup: true (qbm rejects that combo; it would bypass the
@@ -132,12 +136,17 @@ data:
       split_by_category: False
 
     orphaned:
-      # rem_orphaned is off (see commands); config kept for a later review
+      # rem_orphaned stays OFF on purpose (see commands): its referenced-file
+      # matching cannot handle this setup's MIXED content_path forms
+      # (pre-migration /srv/misc/torrents vs newer /srv/Media/Torrents) -
+      # the 2026-10-12 one-off sweep flagged 9568 "orphans" including live
+      # seeding content, and its safety threshold aborted. Stale partials
+      # under Torrents/incomplete are handled by scripts/qbit-cleanup.sh
+      # (suffix-aware referenced-file set from the qb API) instead.
       empty_after_x_days: 60
       min_file_age_minutes: 30
+      max_orphaned_files_to_delete: 50
       exclude_patterns:
         - "**/.RecycleBin/**"
         - "**/.recycle/**"
-        - "**/.qbm-recycle/**"
         - "**/*.!qB"
-      max_orphaned_files_to_delete: 50

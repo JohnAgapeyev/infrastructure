@@ -158,6 +158,30 @@ Second dry run (2026-10-12, config as committed): Movies 103/353, TV
 720p / Prometheus / Godfather superseded releases tagged; library-linked
 files not.
 
+Live run 2026-10-12 (owner-approved): 336 tagged; 24 cleaned up (the
+multi-year-seeded leftovers - qbm 4.13.0 parses time expressions as
+SECONDS, so "14d" became an 840-day threshold; the committed config uses
+MINUTES (20160) instead - ints bypass the parser. Fixed upstream in qbm
+master). First live cleanup crashed on ENOSPC mid-run - the array had
+refilled to 0 free (the freed 259G recycle space was consumed by
+auto-resumed downloads: incomplete/ +109G = the 48 wanted downloads).
+
+2026-10-12 emergency cleanups (all owner-approved):
+- .qbm-recycle emptied early (259G; day-0 backups of the 24 cleaned
+  torrents were lost with it - accepted).
+- 39 stale partials under Torrents/incomplete deleted (+30G real; qb
+  partials are sparse - 529G was logical size). List built from the qb
+  API per-torrent file sets, suffix-aware (!qB temps of live downloads
+  excluded); deleted via one-off pod as 1005:1003.
+- rem_orphaned one-off: ABORTED INCOMPATIBLE - qbm's referenced-file
+  matching cannot handle the mixed content_path forms (9568 false
+  "orphans" incl. live seeding content; its safety threshold stopped
+  deletion). Stays off; qbit-cleanup.sh covers incomplete/ precisely.
+- End state: 56G free, all 26 prometheus targets up, jellyfin healthy.
+- The nightly 04:45 qbm run now cleans eligible noHL torrents into
+  .qbm-recycle (space reclaims when the bin empties after 14d; empty
+  early once the classification is trusted to reclaim ~2TB sooner).
+
 ## qBittorrent seeding config (2026-10-12)
 
 - Global ratio limit DISABLED (was max_ratio 10 + action super-seed:
