@@ -2,13 +2,22 @@
 
 Verified baseline: nightly rclone -> B2 `John-System-Backups/appdata` with
 consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
-2026-09-14).
+2026-09-14; extended with the Nextcloud pg_dump leg, 2026-10-13).
 
 ## Scope
 
 - Protected: `/srv/appdata` (app state + snapshots) + the legacy
   `/srv/Backups` set (the existing pipeline). Media (`/srv/Media`) is NOT
   backed up by design - it is torrents.
+- Protected for Nextcloud (NC phase): `/srv/appdata/nextcloud` (config),
+  `/srv/appdata/nextcloud-data` (user files incl. family photos, trashbin,
+  versions) and the DB via the consistent dump
+  `_snapshots/nextcloud/nextcloud.sql.gz` (the live `postgres/` cluster
+  files are excluded from rclone - the dump is the ONLY DB restore source).
+- NOT protected by design (regenerable): sonarr/radarr/prowlarr live DBs
+  (their own weekly zips in `<app>/Backups/` are synced and are the
+  restore source), `jellyfin/Shokofin/VFS/**` (Shokofin regenerates it
+  from Shoko), `nextcloud-data/appdata_*/**` (instance cache + previews).
 - Disposable: k3s runtime (`/var/lib/rancher/k3s`, SSD), Prometheus TSDB,
   Jellyfin cache. All recreated from git + appdata.
 - The Matter fabric (`/srv/appdata/matter-server`, Phase 9) is also kept
@@ -32,12 +41,18 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
    NOTE: restore `_snapshots/` too - if a live DB is corrupt, replace the
    live file with `sqlite3 _snapshots/<app>/<name>.db ".recover"` output
    or a plain copy of the snapshot.
+   Nextcloud DB: do NOT restore `postgres/` (it is not in B2 anyway) -
+   `make apply-cloud` starts postgres with an EMPTY PGDATA, then import:
+   `gunzip -c /srv/appdata/_snapshots/nextcloud/nextcloud.sql.gz |
+   kubectl -n cloud exec -i deploy/postgres -- psql -U nextcloud -d nextcloud`
+   and `kubectl -n cloud exec deploy/nextcloud -- runuser -u www-data --
+   php /var/www/html/occ files:scan --all`.
 5. `make apply-cluster && make apply-all`
    (kustomize first for namespaces + grafana-admin secret; then helm
    observability). Unbound wildcard host override `*.home.jg-a.com` -> 10.0.0.4 (see tls.md); `make install-cert-manager` before `make apply-cluster` for cert-manager CRDs.
 6. Verify: `kubectl get pods -A`; log into Jellyfin/Radarr/Sonarr;
    ./scripts/qbit-verify-paths.sh (torrent count 519); browse
-   https://grafana.home.jg-a.com.
+   https://grafana.home.jg-a.com and https://nextcloud.home.jg-a.com.
 
 ## Rehearsal (done 2026-09-14, with Prowlarr)
 
@@ -51,10 +66,22 @@ Re-run the rehearsal after any change to the backup pipeline.
 ## Single-app recovery (no full rebuild)
 
 - Radarr/Sonarr/Prowlarr: restore `<app>` dir from B2 (or their own weekly
-  zips in `<app>/Backups/`), `make apply-media`.
+  zips in `<app>/Backups/` - the LIVE DBs are excluded from the sync), 
+  `make apply-media`.
 - Jellyfin: restore `/srv/appdata/jellyfin` from B2 + the pre-rename
   tarball (`/srv/Backups/migration-2026-09-13/jellyfin-pre-rename.tgz`)
-  for a full-library fallback.
+  for a full-library fallback. The `Shokofin/VFS` tree regenerates from
+  Shoko on its own.
 - qBittorrent: `/srv/appdata/qbittorrent/qBittorrent` (fastresume +
   categories); media tree itself is untouched.
 - Grafana: `/srv/appdata/grafana` (or the grafana.db snapshot).
+- Nextcloud: `kubectl -n cloud scale deploy/nextcloud --replicas=0`;
+  restore `/srv/appdata/nextcloud` + `/srv/appdata/nextcloud-data` from
+  B2; wipe `/srv/appdata/postgres` ONLY if the DB is what broke (it is NOT
+  in B2 - recreate it empty); `make apply-cloud` (postgres comes up with
+  an empty PGDATA); import the dump:
+  `gunzip -c /srv/appdata/_snapshots/nextcloud/nextcloud.sql.gz |
+  kubectl -n cloud exec -i deploy/postgres -- psql -U nextcloud -d nextcloud`;
+  scale nextcloud back up; `occ files:scan --all` once Ready. Trashbin and
+  file versions ride the data dir restore. If restoring into a RUNNING
+  instance, `occ maintenance:mode --on` first.

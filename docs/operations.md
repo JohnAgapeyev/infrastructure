@@ -133,10 +133,17 @@ HA/matter together).
 ## Backups
 
 - `rclone-backup.timer` runs daily (drop-in adds the appdata sync):
-  `/srv/appdata` -> B2 `John-System-Backups/appdata` (rclone `sync`,
-  exclusions: prometheus, jellyfin-cache, logs, wal/shm), after
+  `/srv/appdata` -> B2 `John-System-Backups/appdata` (rclone `sync`), after
   `snapshot-sqlite.sh` takes consistent SQLite snapshots into
-  `/srv/appdata/_snapshots/` (which are then synced too).
+  `/srv/appdata/_snapshots/` and `snapshot-postgres.sh` dumps Nextcloud's
+  PostgreSQL into `_snapshots/nextcloud/nextcloud.sql.gz` (both then synced).
+- Exclusions (see the drop-in for the authoritative list): prometheus,
+  jellyfin-cache, logs, wal/shm, the LIVE snapshotted DBs (grafana, shoko,
+  jellyfin, seerr, bazarr, home-assistant), the arr live DBs (their weekly
+  zips in `<app>/Backups/` are the restore source - sonarr mid-import-waves
+  tore its live DB reads and hard-failed the sync, 2026-10-13),
+  `postgres/**` (the pg_dump is the restore source), the Shokofin VFS
+  symlink tree, and nextcloud churn (nextcloud.log, uploads/, appdata_*).
 - Radarr/Sonarr/Prowlarr additionally write weekly config zips to
   `<app>/Backups/`; qBittorrent BT_backup is copied live; the Matter
   fabric is a tiny json blob; `/srv/Media` is NOT backed up (torrents).
