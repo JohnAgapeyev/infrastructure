@@ -109,8 +109,14 @@ kube-prometheus-stack:
             resources:
               requests:
                 storage: 2Gi
-    # single null receiver; Watchdog/InfoInhibitor routed to it. Real
-    # receivers (phone/email) deferred per owner decision.
+    # Routing (plan: ntfy push via the alertmanager-ntfy bridge, see
+    # apps/observability/notify/). Watchdog/InfoInhibitor and anything
+    # unlabeled/info-severity stay silent; severity does the work:
+    #   critical -> bridge (maps to ntfy "urgent"), re-notified hourly
+    #   warning -> bridge (ntfy "high", DND-silenced), re-notified daily
+    # Resolved notifications flow back through the same receiver
+    # (send_resolved). Email can be added later as a `continue: true`
+    # receiver alongside these routes - additive, no rework.
     config:
       global: {}
       route:
@@ -120,8 +126,20 @@ kube-prometheus-stack:
           - matchers:
               - alertname =~ "Watchdog|InfoInhibitor"
             receiver: "null"
+          - matchers:
+              - severity="critical"
+            receiver: push
+            repeat_interval: 1h
+          - matchers:
+              - severity="warning"
+            receiver: push
+            repeat_interval: 24h
       receivers:
         - name: "null"
+        - name: push
+          webhook_configs:
+            - url: http://alertmanager-ntfy.observability.svc.cluster.local:8000/hook
+              send_resolved: true
 
   prometheus-node-exporter:
     extraArgs:

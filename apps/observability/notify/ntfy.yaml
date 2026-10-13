@@ -1,0 +1,133 @@
+# ntfy: self-hosted push notification server (plan: notification sink for
+# Alertmanager; severity/priority mapping happens in the bridge below).
+#
+# ONE-TIME PROVISIONING RUNBOOK - COMPLETED 2026-10-13 (do not redo):
+#   1. `make apply-observability` (deploys ntfy with an EMPTY user db; with
+#      auth-default-access: deny-all nothing can publish/subscribe yet)
+#   2. Create the admin user NON-INTERACTIVELY (interactive `ntfy user add`
+#      needs a TTY, which `kubectl exec` does not provide - it dies with
+#      "password: inappropriate ioctl for device"; the NTFY_PASSWORD env
+#      var skips the prompt):
+#        NTFY_PASS=$(openssl rand -base64 24 | tr -d '/+=' | head -c 24)
+#        kubectl -n observability exec deploy/ntfy -- \
+#          env NTFY_PASSWORD="$NTFY_PASS" ntfy user add --role=admin john
+#      (credentials recorded in secrets/ntfy.env)
+#   3. Mint a token for the bridge and put it in
+#      secrets/alertmanager-ntfy-auth.yml:
+#        kubectl -n observability exec deploy/ntfy -- ntfy token add john
+#   4. Re-apply: the bridge mounts that secret and publishes as the user.
+#   5. Phone (Android): ntfy app -> add account (user/pass) -> subscribe
+#      to topic "alerts". Per-channel DND override stays OFF by default -
+#      "morning is fine" (owner decision 2026-10-13); flip it in the app
+#      if a night-wake path is ever wanted.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ntfy
+  namespace: observability
+  labels: { app: ntfy }
+data:
+  server.yml: |
+    base-url: "https://ntfy.home.jg-a.com"
+    listen-http: ":80"
+    # Traefik terminates TLS; only trust X-Forwarded-For from the proxy
+    behind-proxy: true
+    # Message cache (12h) + user db. Persisted on /srv (RAID) via the
+    # hostPath below: pod restarts must not lose provisioned users/tokens.
+    #
+    # SQLite hardening (2026-10-13 incident: first-ever startup with fresh
+    # DBs + concurrent `ntfy user add`/`token add` CLI produced "database is
+    # locked" storms and 7-33s publishes in rollback-journal mode with no
+    # busy timeout). DSN parameters apply PER CONNECTION (mattn/go-sqlite3):
+    #   _journal_mode=WAL      readers never block the writer and vice versa
+    #   _busy_timeout=15000    lock waits are retried instead of failing fast
+    # user.db cannot take DSN params (ntfy stat()s the auth-file path), so it
+    # gets WAL via auth-startup-queries instead (journal_mode is persistent).
+    cache-file: "/var/cache/ntfy/cache.db?_journal_mode=WAL&_busy_timeout=15000"
+    cache-duration: "12h"
+    auth-file: "/var/cache/ntfy/user.db"
+    auth-startup-queries: "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=15000;"
+    # Topic names are NOT enough protection here (ingress may be reachable
+    # off-LAN via the wildcard cert): only authenticated users may
+    # publish/subscribe. See runbook above for user/token provisioning.
+    auth-default-access: "deny-all"
+    # Web app + Android app account login endpoints
+    enable-login: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ntfy
+  namespace: observability
+  labels: { app: ntfy }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: ntfy }
+  template:
+    metadata:
+      labels: { app: ntfy }
+    spec:
+      containers:
+        - name: ntfy
+          # upstream image has no USER directive -> runs as root; the
+          # /srv/appdata/ntfy hostPath is created root-owned by
+          # bootstrap/host/create-users.sh (same call as the other
+          # observability dirs)
+          image: binwiederhier/ntfy:v2.30.0
+          args: ["serve", "--config", "/etc/ntfy/server.yml"]
+          ports:
+            - { name: http, containerPort: 80 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/ntfy/server.yml, subPath: server.yml }
+            - { name: cache, mountPath: /var/cache/ntfy }
+          readinessProbe:
+            httpGet: { path: /v1/health, port: 80 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /v1/health, port: 80 }
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: config
+          configMap: { name: ntfy }
+        - name: cache
+          hostPath: { path: /srv/appdata/ntfy, type: Directory }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ntfy
+  namespace: observability
+  labels: { app: ntfy }
+spec:
+  selector: { app: ntfy }
+  ports:
+    - { name: http, port: 80, targetPort: 80 }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ntfy
+  namespace: observability
+spec:
+  # wildcard *.home.jg-a.com via the Traefik default TLSStore cert;
+  # no per-ingress secret needed (same as the media app Ingresses)
+  tls:
+    - hosts:
+        - ntfy.home.jg-a.com
+  rules:
+    - host: ntfy.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ntfy
+                port: { number: 80 }

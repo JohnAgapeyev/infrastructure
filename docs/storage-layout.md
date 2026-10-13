@@ -50,6 +50,7 @@ All app state lives on `/srv` (RAID).
 | prometheus | 1000 | 1000 | in-image UID (chart default); host uid 1000 = john |
 | grafana | 472 | 472 | in-image UID (chart default) |
 | alertmanager | 1000 | 1000 | in-image UID (chart default) |
+| ntfy | 0 | 0 | in-image default root (upstream image has no USER); /srv/appdata/ntfy holds cache + user/token db |
 
 Plan's original UIDs 980-982 were taken (systemd users); owner chose auto
 assignment at creation. `/srv/appdata/<app>` dirs are chowned `<user>:media`

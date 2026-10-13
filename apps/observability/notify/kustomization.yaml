@@ -1,0 +1,48 @@
+# Alertmanager notification sinks (plan: ntfy push + severity routing,
+# owner decisions 2026-10-13: Android phone, "morning is fine", no
+# dead-man's-switch, no GoAlert platform).
+#
+# - ntfy.yaml: self-hosted ntfy server (push to the phone app)
+# - alertmanager-ntfy.yaml: webhook bridge Alertmanager -> ntfy with
+#   severity -> priority mapping (Alertmanager has no native ntfy
+#   receiver as of v0.34.x)
+#
+# Severity routing lives in kube-prometheus-stack/values.yaml
+# (alertmanager.config.route): critical -> urgent push, re-notified
+# hourly; warning -> high push, re-notified daily; info/unlabeled ->
+# null. Emails can be added later as a `continue: true` receiver
+# (additive, no rework) once an SMTP relay is chosen.
+#
+# FIRST-DEPLOY RUNBOOK: COMPLETED 2026-10-13 (see ntfy.yaml for the
+# non-interactive details - NTFY_PASSWORD env var, not the prompt).
+#   1. `make apply-observability` (ntfy comes up with an empty user db)
+#   2. kubectl -n observability exec deploy/ntfy -- \
+#        ntfy user add --role=admin <user>
+#      kubectl -n observability exec deploy/ntfy -- ntfy token add <user>
+#   3. Put the token in secrets/alertmanager-ntfy-auth.yml:
+#        ntfy:
+#          auth:
+#            token: "tk_..."
+#   4. `make apply-observability` again (bridge mounts the secret)
+#   5. Phone: ntfy app -> add account -> subscribe to topic "alerts"
+#   6. End-to-end test:
+#        kubectl -n observability exec statefulset/alertmanager-observability-kube-prometheus-alertmanager -- \
+#          amtool alert add alertname=TestAlert severity=critical \
+#          --annotation=summary="Routing test"
+#
+# The bridge pod stays Pending (mounted secret missing) until step 4.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ntfy.yaml
+  - alertmanager-ntfy.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  # ntfy access token for the bridge (minted by the runbook above).
+  # File (not env) secret: the bridge merges extra YAML config files via
+  # --configs, and the auth key path is ntfy.auth.token.
+  - name: alertmanager-ntfy-auth
+    namespace: observability
+    files:
+      - auth.yml=../../../secrets/alertmanager-ntfy-auth.yml

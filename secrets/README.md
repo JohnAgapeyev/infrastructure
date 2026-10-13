@@ -12,4 +12,6 @@ by kustomize `secretGenerator` in the app kustomizations.
 | `bazarr.env` | `OPENSUBTITLES_USER`, `OPENSUBTITLES_PASS` | bazarr provider |
 | `shoko.env` | `SHOKO_USER`, `SHOKO_PASS`, `ANIDB_USER`, `ANIDB_PASS` | shoko first run |
 | `grafana.env` | `admin-user`, `admin-password` | kube-prometheus-stack |
+| `alertmanager-ntfy-auth.yml` | `ntfy.auth.token` | observability notify kustomization (bridge -> ntfy; mint via the runbook in apps/observability/notify/) |
+| `ntfy.env` | `NTFY_USER`, `NTFY_PASSWORD` | ntfy admin login for the phone/web app (not consumed by any manifest) |
 | `certmanager.env` | `CLOUDFLARE_API_TOKEN` | cert-manager dns01 solver (wildcard `*.home.jg-a.com`) |

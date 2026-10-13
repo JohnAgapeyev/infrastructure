@@ -1,0 +1,107 @@
+# alertmanager-ntfy: webhook bridge Alertmanager -> ntfy.
+#
+# Alertmanager has NO native ntfy receiver (verified against upstream
+# v0.34.1 configuration docs) - a forwarder is required. This one maps
+# severity -> ntfy priority via gval expressions on the alert payload
+# (fields: status, labels, annotations, generatorURL...; see upstream
+# internal/alertmanager/format.go).
+#
+# Traffic path: Alertmanager --(webhook /hook)--> bridge --(HTTP publish)-->
+# ntfy.observability.svc (cluster-internal, bypasses Traefik).
+# The webhook itself carries no auth (cluster-internal only, ClusterIP;
+# same trust domain as Alertmanager) - ntfy auth via the mounted token
+# Secret is the actual boundary.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-ntfy
+  namespace: observability
+  labels: { app: alertmanager-ntfy }
+data:
+  config.yml: |
+    http:
+      addr: ":8000"
+    ntfy:
+      baseurl: "http://ntfy.observability.svc.cluster.local"
+      # default is 10s; a transient ntfy hiccup then 502s the webhook and
+      # waits for Alertmanager's retry. 30s rides out short stalls.
+      timeout: 30s
+      notification:
+        topic: "alerts"
+        # severity -> urgency (owner decision 2026-10-13: no night wake-ups;
+        # "urgent" only breaks through DND if the app-side override is ON,
+        # which stays OFF by default):
+        #   firing + critical -> urgent (max, phone rings through if enabled)
+        #   firing + warning  -> high (loud-ish, silenced by DND)
+        #   resolved          -> default (quiet "+1")
+        priority: 'status == "firing" ? labels.severity == "critical" ? "urgent" : "high" : "default"'
+        tags:
+          - tag: rotating_light
+            condition: 'status == "firing"'
+          - tag: +1
+            condition: 'status == "resolved"'
+        templates:
+          title: |
+            {{ if eq .Status "resolved" }}Resolved: {{ end }}{{ index .Annotations "summary" }}
+          description: |
+            {{ index .Annotations "description" }}
+          headers:
+            # tap-through opens the Prometheus expression that fired
+            X-Click: |
+              {{ .GeneratorURL }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager-ntfy
+  namespace: observability
+  labels: { app: alertmanager-ntfy }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: alertmanager-ntfy }
+  template:
+    metadata:
+      labels: { app: alertmanager-ntfy }
+    spec:
+      containers:
+        - name: alertmanager-ntfy
+          image: ghcr.io/alexbakker/alertmanager-ntfy:1.2.1
+          # ntfy auth (token) lives in a separate file so the committed
+          # config stays secret-free (upstream --configs merge feature)
+          args: ["--configs", "/etc/alertmanager-ntfy/config.yml,/etc/alertmanager-ntfy/auth.yml"]
+          ports:
+            - { name: http, containerPort: 8000 }
+          volumeMounts:
+            - { name: config, mountPath: /etc/alertmanager-ntfy/config.yml, subPath: config.yml }
+            - { name: auth, mountPath: /etc/alertmanager-ntfy/auth.yml, subPath: auth.yml }
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 60
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 64Mi }
+      volumes:
+        - name: config
+          configMap: { name: alertmanager-ntfy }
+        # from secretGenerator in this kustomization; pod stays Pending
+        # until the one-time runbook in ntfy.yaml has produced it
+        - name: auth
+          secret: { secretName: alertmanager-ntfy-auth }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-ntfy
+  namespace: observability
+  labels: { app: alertmanager-ntfy }
+spec:
+  selector: { app: alertmanager-ntfy }
+  ports:
+    - { name: http, port: 8000, targetPort: 8000 }

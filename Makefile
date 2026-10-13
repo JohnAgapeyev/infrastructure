@@ -35,6 +35,10 @@ apply-observability:
 	helm upgrade --install observability apps/observability/kube-prometheus-stack \
 		-n observability -f apps/observability/kube-prometheus-stack/values.yaml
 	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/exporters | kubectl apply -f -
+	# notification sinks: ntfy + the Alertmanager->ntfy bridge (plan:
+	# severity routing is in kube-prometheus-stack/values.yaml; first-deploy
+	# runbook in apps/observability/notify/kustomization.yaml)
+	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/notify | kubectl apply -f -
 	# server-side apply: large dashboard ConfigMaps exceed the 256 KiB
 	# client-side last-applied annotation limit
 	kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/dashboards | kubectl apply --server-side --force-conflicts -f -

@@ -24,7 +24,7 @@ for name in prowlarr bazarr seerr shoko recyclarr unpackerr; do
 done
 
 # App state dirs on the RAID (all disposable-by-app, restorable from B2).
-mkdir -p /srv/appdata/{qbittorrent,jellyfin,jellyfin-cache,prowlarr,radarr,sonarr,bazarr,recyclarr,seerr,shoko,prometheus,grafana,alertmanager,_snapshots,_scripts}
+mkdir -p /srv/appdata/{qbittorrent,jellyfin,jellyfin-cache,prowlarr,radarr,sonarr,bazarr,recyclarr,seerr,shoko,prometheus,grafana,alertmanager,ntfy,_snapshots,_scripts}
 
 # Per-app ownership (by name: uses whatever UID the host assigned/preserved).
 for name in qbittorrent jellyfin prowlarr radarr sonarr bazarr recyclarr seerr shoko; do
@@ -37,6 +37,10 @@ chown jellyfin:media /srv/appdata/jellyfin-cache
 # against chart values in Phase 7).
 chown 1000:1000 /srv/appdata/prometheus /srv/appdata/alertmanager
 chown 472:472 /srv/appdata/grafana
+# ntfy: upstream image has no USER -> runs as root; keep root:root (default).
+# Holds the message cache + the provisioned user/token db (NOT disposable -
+# see apps/observability/notify/ for the provisioning runbook).
+chown 0:0 /srv/appdata/ntfy
 
 # Host-side utility dirs (root-run snapshot script + snapshots).
 chown root:media /srv/appdata/_snapshots /srv/appdata/_scripts
