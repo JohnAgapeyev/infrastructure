@@ -8,9 +8,20 @@ updates:
       exporters: { patterns: ["*exporter*", "ghcr.io/onedr0p/exportarr"] }
       # busybox = the shared wait-for-network init container of the home apps
       home: { patterns: ["ghcr.io/home-assistant/*", "ghcr.io/matter-js/*", "busybox"] }
+      # NC stack (apps/cloud): all bumps in one PR
+      cloud: { patterns: ["nextcloud", "postgres", "redis"] }
     ignore:
       - dependency-name: "jellyfin/jellyfin"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Nextcloud majors are one-way DB migrations (one major at a time, in
+      # a manual window: snapshot + tar + pg_dump first - like Jellyfin but
+      # stricter); postgres majors need pg_upgrade; redis majors manual too
+      - dependency-name: "nextcloud"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: helm
     directory: "/apps/observability/kube-prometheus-stack"
     schedule: { interval: weekly, day: sunday }

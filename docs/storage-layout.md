@@ -24,6 +24,10 @@ All app state lives on `/srv` (RAID).
   temp path (if enabled).
 - `/srv/appdata/<app>` - app state (see below); `_snapshots/` - SQLite online
   backups; `_scripts/` - scripts deployed on the host (snapshot-sqlite.sh).
+- `/srv/appdata/nextcloud{,-data}` - Nextcloud config / user files (NC
+  phase; www-data 33:media); `/srv/appdata/postgres` - PGDATA for
+  Nextcloud's PostgreSQL (999:999, 0700; consistent dumps live in
+  `_snapshots/nextcloud/`, live files are excluded from the rclone sync).
 - `/srv/misc/torrents` is a host symlink -> `/srv/Media/Torrents` (the qbit
   pod additionally mounts the real dir at `/srv/misc/torrents` = compat
   mount A; the Samba `[temp]` share does NOT follow the symlink - expected).
@@ -51,6 +55,8 @@ All app state lives on `/srv` (RAID).
 | grafana | 472 | 472 | in-image UID (chart default) |
 | alertmanager | 1000 | 1000 | in-image UID (chart default) |
 | ntfy | 0 | 0 | in-image default root (upstream image has no USER); /srv/appdata/ntfy holds cache + user/token db |
+| www-data (nextcloud) | 33 | 33 | in-image UID (official nextcloud image); appdata dirs chowned 33:media |
+| postgres (nextcloud) | 999 | 999 | in-image UID; /srv/appdata/postgres 0700 |
 
 Plan's original UIDs 980-982 were taken (systemd users); owner chose auto
 assignment at creation. `/srv/appdata/<app>` dirs are chowned `<user>:media`

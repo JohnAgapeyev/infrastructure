@@ -47,6 +47,14 @@ chown root:media /srv/appdata/_snapshots /srv/appdata/_scripts
 
 chmod 750 /srv/appdata/*
 
+# Nextcloud (phase NC-0, 2026-10-13): the official image runs as www-data
+# (in-image UID 33 - the grafana-472 precedent), group media; postgres uses
+# its in-image UID 999. No new host users needed.
+mkdir -p /srv/appdata/nextcloud /srv/appdata/nextcloud-data /srv/appdata/postgres
+chown 33:media /srv/appdata/nextcloud /srv/appdata/nextcloud-data
+chown 999:999 /srv/appdata/postgres
+chmod 700 /srv/appdata/postgres   # postgres refuses group/world-accessible PGDATA
+
 echo
 echo "Assigned UIDs (record these in docs/storage-layout.md):"
 getent passwd prowlarr bazarr seerr shoko recyclarr unpackerr
