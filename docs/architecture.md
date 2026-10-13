@@ -9,7 +9,7 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   single node `nas`, sqlite datastore, bundled Traefik + klipper servicelb +
   CoreDNS + metrics-server. Runtime state `/var/lib/rancher/k3s` (SSD,
   disposable).
-- **Namespaces**: `media`, `home`, `observability` (see `cluster/`).
+- **Namespaces**: `media`, `home`, `observability`, `cloud` (see `cluster/`).
 - **App state**: `/srv/appdata/<app>` on the RAID array, mounted via plain
   `hostPath` volumes (type Directory). No PV/PVC, no operators beyond
   kube-prometheus-stack.
@@ -34,7 +34,10 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   in `cluster/network-policies/media.yaml` (inter-service, DNS, LAN,
   traefik/observability namespaces, per-app internet egress; BT port
   41045 open for torrent peers). home ns is hostNetwork - policies never
-  apply there.
+  apply there. The cloud ns (NC phase) is default-deny too: DNS +
+  same-ns (postgres/redis), internet + SMTP egress for the nextcloud pod
+  only, ingress from traefik/observability - no LAN allow needed (all
+  clients go through Traefik).
 
 ## Services
 
@@ -50,6 +53,7 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
 | seerr | request front-end | `ghcr.io/seerr-team/seerr` |
 | shoko (+ shokofin plugin) | anime metadata (AniDB) | `ghcr.io/shokoanime/server` |
 | home-assistant / matter-server | smarthome (Phase 9) | `ghcr.io/home-assistant/*`, `ghcr.io/matter-js/*` |
+| nextcloud (+ postgres, redis) | family cloud: files, photos (memories), calendar/contacts (NC phase) | `nextcloud:35.0.1-apache`, `postgres:18.6`, `redis:8.10.2-alpine` in `apps/cloud/` |
 | kube-prometheus-stack | metrics/alerts/dashboards | umbrella chart in `apps/observability/` |
 | cert-manager | TLS issuance (LE wildcard via Cloudflare DNS-01) | `v1.21.2` pinned, `scripts/install-cert-manager.sh` |
 

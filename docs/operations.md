@@ -207,9 +207,44 @@ HA/matter together).
 | Prometheus | https://prometheus.home.jg-a.com | |
 | Alertmanager | https://alertmanager.home.jg-a.com | |
 | Home Assistant | https://ha.home.jg-a.com | http://nas:8123 |
+| Nextcloud | https://nextcloud.home.jg-a.com | |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
-apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms).
+apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms). Nextcloud:
+family instance - owner `john` (admin, TOTP enforced) + `family` group
+members; all users are on the LAN or VPN (WireGuard DNS is set in the peer
+generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
+
+## Nextcloud ops (NC phase)
+
+- **occ**: `./scripts/nc-occ.sh <args>` (e.g. `status`, `user:list`).
+- **Accounts**: family members = regular users, added via
+  `./scripts/nc-occ.sh user:add --email <a@b.c> <name>` then
+  `occ group:adduser family <name>` (email REQUIRED - password resets are
+  emailed; SMTP must be configured first, see below). Default quota
+  100 GB/user (`files default_quota` appconfig); `john` is unlimited.
+- **SMTP (PENDING - owner to fill `secrets/nextcloud.env` SMTP_* keys,
+  then `make apply-cloud` and `occ config:system:set mail_*` or the
+  admin UI)**: needed for password resets, invites, share notifications.
+- **Updates**: nextcloud/postgres/redis majors are MANUAL (Dependabot
+  ignores semver-major): NC can upgrade ONE major at a time; do it in a
+  window with `occ maintenance:mode --on`, snapshot + tar
+  `/srv/appdata/nextcloud` + the pg_dump FIRST (Jellyfin-style caution,
+  stricter); NC majors also require app-compat checks for
+  memories/calendar/contacts. Minors/patches = merge the Dependabot PR +
+  `make apply-cloud` (pod Recreate re-syncs the app code via the
+  entrypoint).
+- **Probes/install envs**: the deployment has NO install envs by design -
+  see the deployment.yaml comment (install envs are first-run only;
+  steady-state config lives in the mounted config.php, occ-managed).
+- **Monitoring**: nextcloud-exporter in observability; `NextcloudDown`
+  (semantic `nextcloud_up` + exporter-absence) and
+  `NextcloudScrapeErrors` (rotated serverinfo token is the usual cause -
+  re-mint with `occ config:app:set serverinfo token` and update
+  `secrets/nextcloud-exporter.env`). Grafana dashboard "Nextcloud".
+- **Backups**: pg_dump pre-step + data dir in the nightly B2 sync (see
+  Backups section + [disaster-recovery.md](disaster-recovery.md)).
+
 
 ## Known quirks (learned during migration)
 

@@ -24,10 +24,16 @@ All app state lives on `/srv` (RAID).
   temp path (if enabled).
 - `/srv/appdata/<app>` - app state (see below); `_snapshots/` - SQLite online
   backups; `_scripts/` - scripts deployed on the host (snapshot-sqlite.sh).
-- `/srv/appdata/nextcloud{,-data}` - Nextcloud config / user files (NC
-  phase; www-data 33:media); `/srv/appdata/postgres` - PGDATA for
-  Nextcloud's PostgreSQL (999:999, 0700; consistent dumps live in
-  `_snapshots/nextcloud/`, live files are excluded from the rclone sync).
+- `/srv/appdata/nextcloud` - Nextcloud state: `config/` + `custom_apps/`
+  subdirs only (the app code itself is container-local; the entrypoint
+  rsyncs it on every pod start - never mount /var/www/html wholesale).
+  Created 33:media but the image entrypoint's rsync --chown makes
+  everything 33:33 in practice - no functional impact.
+  `/srv/appdata/nextcloud-data` - user files (incl. trashbin/versions;
+  `nextcloud.log`, `uploads/`, `appdata_*` cache excluded from the B2
+  sync). `/srv/appdata/postgres` - PGDATA for Nextcloud's PostgreSQL
+  (999:999, 0700; consistent dumps live in `_snapshots/nextcloud/`, live
+  files are excluded from the rclone sync).
 - `/srv/misc/torrents` is a host symlink -> `/srv/Media/Torrents` (the qbit
   pod additionally mounts the real dir at `/srv/misc/torrents` = compat
   mount A; the Samba `[temp]` share does NOT follow the symlink - expected).

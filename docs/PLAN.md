@@ -11,6 +11,25 @@ incl. the reboot test (12/12 nodes, no manual action). REMAINING: Docker
 removal after the 2-week stability gate (~2026-10-14) - RESUME FROM
 `docs/phase9-handoff.md`.
 
+Progress (2026-10-13, NC phase - Nextcloud): NC-0..NC-5 done. Family
+cloud at https://nextcloud.home.jg-a.com (ns `cloud`, official image
+35.0.1-apache + postgres 18.6 + redis 8.10.2, subdir-only hostPath
+mounts, default-deny NetworkPolicy, cron via CronJob with a
+memory-emptyDir app scratch). Memories/calendar/contacts installed;
+`family` group, 100 GB default quota, TOTP enforced for admin.
+Observability: nextcloud-exporter + NextcloudDown/NextcloudScrapeErrors +
+Grafana dashboard (alert test fired and resolved live). Backups: pg_dump
+pre-step in the rclone pipeline (live arr DBs + Shokofin VFS + nextcloud
+churn excluded; `--delete-excluded` added after the rehearsal caught the
+stale-copies gap). DR: rehearsal extended with the pg restore leg - PASSED
+2026-10-13. LESSONS (details in commit messages + operations.md): install
+envs are first-run only (steady state = config.php via occ); kubelet
+httpGet probes hit the trusted-domain 400 (exec-curl probes); Traefik v3
+readTimeout covers the whole request body (502 at exactly 60s); the
+image's apache LimitRequestBody defaults to 1GiB (APACHE_BODY_LIMIT=0).
+PENDING: SMTP creds (owner) -> mail config + family onboarding; TOTP
+enrollment happens at john's next login.
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner
