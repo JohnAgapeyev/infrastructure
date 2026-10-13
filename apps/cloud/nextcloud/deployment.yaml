@@ -27,36 +27,47 @@ spec:
         - name: nextcloud
           image: nextcloud:35.0.1-apache
           env:
-            # first-run autoinstall (config.php is created in the mounted
-            # config dir; envs only take effect while it is absent)
-            - name: NEXTCLOUD_ADMIN_USER
-              valueFrom: { secretKeyRef: { name: nextcloud-env, key: NEXTCLOUD_ADMIN_USER } }
-            - name: NEXTCLOUD_ADMIN_PASSWORD
-              valueFrom: { secretKeyRef: { name: nextcloud-env, key: NEXTCLOUD_ADMIN_PASSWORD } }
-            - name: POSTGRES_PASSWORD
-              valueFrom: { secretKeyRef: { name: nextcloud-env, key: POSTGRES_PASSWORD } }
-            - { name: POSTGRES_HOST, value: "postgres.cloud.svc.cluster.local" }
-            - { name: POSTGRES_USER, value: nextcloud }
-            - { name: POSTGRES_DB, value: nextcloud }
+            # NO install envs here (NEXTCLOUD_ADMIN_*, POSTGRES_*,
+            # NEXTCLOUD_TRUSTED_DOMAINS, TRUSTED_PROXIES, OVERWRITE*): with
+            # subdir mounts, /var/www/html (incl. version.php) is recreated
+            # on every pod start, and the entrypoint would retry
+            # `occ maintenance:install` against the already-installed DB
+            # until it crash-loops. Install envs are FIRST-RUN ONLY -
+            # re-add temporarily for a from-scratch install. Steady-state
+            # config lives in the mounted config.php (occ-managed).
+            # REDIS_HOST is kept: it only drives the PHP session handler
+            # (configure_redis_session), not the installer.
             - { name: REDIS_HOST, value: "redis.cloud.svc.cluster.local" }
-            - { name: NEXTCLOUD_TRUSTED_DOMAINS, value: "nextcloud.home.jg-a.com" }
-            # Traefik terminates TLS; without trusted_proxies NC sees every
-            # client as the Traefik pod IP (HA 400 lesson) and brute-force
-            # protection would throttle everyone as one address
-            - { name: TRUSTED_PROXIES, value: "10.42.0.0/16" }
-            - { name: OVERWRITECLIURL, value: "https://nextcloud.home.jg-a.com" }
-            - { name: OVERWRITEPROTOCOL, value: https }
             - { name: PHP_UPLOAD_LIMIT, value: 10G }
+            # the image's apache layer has its OWN body cap (default 1GiB ->
+            # 413 on big WebDAV PUTs); LimitRequestBody needs a plain
+            # non-negative integer, max 2GiB-1, so 0 (unlimited) it is -
+            # the PHP post_max_size=10G above is the real limit
+            - { name: APACHE_BODY_LIMIT, value: "0" }
             - { name: TZ, value: America/Vancouver }
           ports:
             - { name: http, containerPort: 80 }
-          readinessProbe:
-            httpGet: { path: /status.php, port: 80 }
+          # /status.php via kubelet httpGet is rejected by Nextcloud's
+          # trusted-domain guard (Host: <pod-ip> -> 400 "Trusted domain
+          # error"); httpGet cannot set a Host header. exec-curl against
+          # localhost (auto-trusted by the entrypoint) is the semantic
+          # probe (matter-server health.py precedent).
+          startupProbe:
+            exec:
+              command: ["curl", "-sf", "http://localhost/status.php"]
             periodSeconds: 10
+            failureThreshold: 45
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["curl", "-sf", "http://localhost/status.php"]
+            periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
-            httpGet: { path: /status.php, port: 80 }
-            initialDelaySeconds: 60
+            exec:
+              command: ["curl", "-sf", "http://localhost/status.php"]
             periodSeconds: 60
+            timeoutSeconds: 5
           resources:
             requests: { cpu: 250m, memory: 512Mi }
             limits: { memory: 2Gi }

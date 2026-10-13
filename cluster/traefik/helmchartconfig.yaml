@@ -35,6 +35,15 @@ spec:
               regex: traefik_entrtpoint_request_duration_seconds_bucket
               sourceLabels: [__name__]
     ports:
+      websecure:
+        # Traefik v3 readTimeout (default 60s) covers reading the ENTIRE
+        # request incl. body - big WebDAV uploads to Nextcloud die with 502
+        # at exactly 60s even on LAN. 1h bounds it generously for VPN-speed
+        # uploads; acceptable because this entrypoint is LAN/VPN-only (no
+        # public exposure, no slowloris surface).
+        transport:
+          respondingTimeouts:
+            readTimeout: 3600s
       web:
         # HTTP -> HTTPS on every host (no plaintext vhosts remain; legacy
         # host ports 8096/8080 are unchanged, they bypass Traefik).

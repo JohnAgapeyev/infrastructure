@@ -1,5 +1,13 @@
-# Background jobs via the container's cron.php (recommended over AJAX).
-# Runs as www-data (33) directly via securityContext - no sudo needed.
+# Background jobs via cron.php (recommended over AJAX). The image ships the
+# app at /usr/src/nextcloud and the ENTRYPOINT rsyncs it into /var/www/html
+# - so the entrypoint MUST run (overriding `command:` leaves html empty and
+# cron.php missing). NEXTCLOUD_UPDATE=1 forces that sync block for a
+# non-apache command; the 839M copy lands in a memory-backed emptyDir (no
+# SSD churn every 5 minutes, nothing to persist - real state is in the
+# config/custom_apps/data hostPaths mounted under it). The container memory
+# limit must exceed the tmpfs: shmem pages are charged to the container
+# cgroup. The entrypoint execs arbitrary commands as ROOT -> drop to
+# www-data ourselves via su (the entrypoint's own run_as idiom).
 # Label app: nextcloud-cron, NOT app: nextcloud, so the nextcloud Service
 # selector never adds cron pod IPs as endpoints (Traefik would
 # intermittently route a request into a pod that is not a web server).
@@ -21,23 +29,26 @@ spec:
           labels: { app: nextcloud-cron }
         spec:
           restartPolicy: Never
-          securityContext:
-            runAsUser: 33
-            runAsGroup: 33
           containers:
             - name: cron
               image: nextcloud:35.0.1-apache
-              command: ["php", "/var/www/html/cron.php"]
+              args: ["su", "-p", "www-data", "-s", "/bin/sh", "-c", "php /var/www/html/cron.php"]
+              env:
+                - { name: NEXTCLOUD_UPDATE, value: "1" }
               resources:
-                requests: { cpu: 50m, memory: 128Mi }
-                limits: { memory: 512Mi }
+                requests: { cpu: 100m, memory: 256Mi }
+                limits: { memory: 2Gi }
               volumeMounts:
+                - { name: html, mountPath: /var/www/html }
                 - { name: config, mountPath: /var/www/html/config }
+                - { name: custom-apps, mountPath: /var/www/html/custom_apps }
                 - { name: data, mountPath: /var/www/html/data }
-              # custom_apps is not needed: cron.php loads config.php
-              # (db/redis creds live there, not in env)
           volumes:
+            - name: html
+              emptyDir: { medium: Memory, sizeLimit: 2Gi }
             - name: config
               hostPath: { path: /srv/appdata/nextcloud/config, type: Directory }
+            - name: custom-apps
+              hostPath: { path: /srv/appdata/nextcloud/custom_apps, type: Directory }
             - name: data
               hostPath: { path: /srv/appdata/nextcloud-data, type: Directory }
