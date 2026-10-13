@@ -89,3 +89,29 @@ spec:
           annotations:
             summary: "Home Assistant scrape is down (10m)"
             description: "Prometheus cannot scrape HA's /api/prometheus endpoint. Check http://nas:8123 and `kubectl -n home logs deploy/home-assistant`."
+    - name: cloud
+      rules:
+        - alert: NextcloudDown
+          # semantic: nextcloud_up is the exporter's view of the serverinfo
+          # API - the only signal that sees "Traefik fine, pod fine, app
+          # broken" (matter-exporter philosophy). absent() covers the
+          # exporter itself being gone (target absence != down - the
+          # scale-to-0 quirk; the media alerts share that limitation).
+          expr: nextcloud_up == 0 or absent(up{job="nextcloud-exporter"})
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Nextcloud is down (10m)"
+            description: "nextcloud-exporter cannot scrape the serverinfo API (or the exporter vanished). Check `kubectl -n cloud get pods`, https://nextcloud.home.jg-a.com/status.php and `kubectl -n observability logs deploy/nextcloud-exporter`."
+        - alert: NextcloudScrapeErrors
+          # target stays up but the API calls fail (bad/rotated app
+          # password, server errors). Adapted from upstream
+          # contrib/prometheus-alerts.yaml.
+          expr: sum by (cause) (rate(nextcloud_scrape_errors_total[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Nextcloud scrape errors ({{ $labels.cause }})"
+            description: "nextcloud-exporter reports persistent scrape errors (cause: {{ $labels.cause }}). Most often an expired app password: re-mint via OCS getapppassword and update secrets/nextcloud-exporter.env."

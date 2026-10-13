@@ -7,3 +7,4 @@ resources:
   - traefik.yaml
   - exportarr.yaml
   - home.yaml
+  - nextcloud.yaml

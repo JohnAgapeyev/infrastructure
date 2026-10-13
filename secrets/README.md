@@ -15,4 +15,5 @@ by kustomize `secretGenerator` in the app kustomizations.
 | `alertmanager-ntfy-auth.yml` | `ntfy.auth.token` | observability notify kustomization (bridge -> ntfy; mint via the runbook in apps/observability/notify/) |
 | `ntfy.env` | `NTFY_USER`, `NTFY_PASSWORD` | ntfy admin login for the phone/web app (not consumed by any manifest) |
 | `certmanager.env` | `CLOUDFLARE_API_TOKEN` | cert-manager dns01 solver (wildcard `*.home.jg-a.com`) |
-| `nextcloud.env` | `NEXTCLOUD_ADMIN_USER`, `NEXTCLOUD_ADMIN_PASSWORD`, `POSTGRES_PASSWORD`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM_ADDRESS`, `MAIL_DOMAIN`, `NEXTCLOUD_EXPORTER_TOKEN` | nextcloud install (NC-1), postgres, nextcloud-exporter (NC-2) |
+| `nextcloud.env` | `NEXTCLOUD_ADMIN_USER`, `NEXTCLOUD_ADMIN_PASSWORD`, `POSTGRES_PASSWORD`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM_ADDRESS`, `MAIL_DOMAIN` | nextcloud install (NC-1, first-run envs), postgres |
+| `nextcloud-exporter.env` | `NEXTCLOUD_AUTH_TOKEN` | nextcloud-exporter (NC-2; serverinfo app token - `occ config:app:set serverinfo token`) |

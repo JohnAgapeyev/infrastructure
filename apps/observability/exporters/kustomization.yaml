@@ -11,6 +11,9 @@ resources:
   # secrets/homeassistant.env, prometheus: block in the migrated HA
   # configuration.yaml (bootstrap/host/phase9c-ha-metrics.sh), HA restarted.
   - home-assistant.yaml
+  # NC-2: serverinfo scrape via the public URL (Traefik) + OCS-minted
+  # app password
+  - nextcloud.yaml
 generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:
@@ -22,6 +25,10 @@ secretGenerator:
   - name: arr-apikeys
     namespace: observability
     env: ../../../secrets/arr.env
+    type: Opaque
+  - name: nextcloud-exporter-creds
+    namespace: observability
+    env: ../../../secrets/nextcloud-exporter.env
     type: Opaque
   - name: qbittorrent-creds
     namespace: observability
