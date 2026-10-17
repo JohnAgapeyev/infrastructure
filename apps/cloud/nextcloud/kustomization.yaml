@@ -5,6 +5,7 @@ resources:
   - cronjob.yaml
   - service.yaml
   - ingress.yaml
+  - middleware.yaml
 generatorOptions:
   disableNameSuffixHash: true
 secretGenerator:

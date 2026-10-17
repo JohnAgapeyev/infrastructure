@@ -1,0 +1,16 @@
+# HSTS for Nextcloud (admin scan: "Strict-Transport-Security ... should be
+# set (should be at least 15552000 seconds)"). TLS terminates at Traefik,
+# so the header must be injected there - a namespaced Traefik Middleware
+# CRD attached to the nextcloud Ingress via the router.middlewares
+# annotation. Scoped to this host only (no includeSubdomains/preload: this
+# is a single-host fix, not a domain-wide commitment).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: nextcloud-hsts
+  namespace: cloud
+spec:
+  headers:
+    stsSeconds: 15552000
+    stsIncludeSubdomains: false
+    stsPreload: false
