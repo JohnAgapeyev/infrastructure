@@ -31,7 +31,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: cron
-              image: nextcloud:35.0.1-apache
+              image: nextcloud:35.0.2-apache
               args: ["su", "-p", "www-data", "-s", "/bin/sh", "-c", "php /var/www/html/cron.php"]
               env:
                 - { name: NEXTCLOUD_UPDATE, value: "1" }

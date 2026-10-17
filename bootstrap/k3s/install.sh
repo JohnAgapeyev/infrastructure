@@ -5,7 +5,7 @@
 # API gone ~20 s). Rollback = set old version, rerun.
 set -euo pipefail
 
-K3S_VERSION="v1.36.4+k3s1"   # latest stable 2026-09-13 (github.com/k3s-io/k3s/releases)
+K3S_VERSION="v1.36.5+k3s1"   # patch bump 2026-10-16 (was v1.36.4, 2026-09-13); v1.37.1 exists - one minor at a time, read notes first
 
 install -D -m 0644 "$(dirname "$0")/config.yaml" /etc/rancher/k3s/config.yaml
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -
