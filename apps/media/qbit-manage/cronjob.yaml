@@ -13,6 +13,11 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      # 2026-10-17: auto-delete finished/failed jobs after 1d. Without
+      # this a single failed run (e.g. the 2026-10-12 recyclarr failure)
+      # leaves a Failed job object in the namespace forever, and the
+      # chart's KubeJobFailed alert pages on its existence for weeks.
+      ttlSecondsAfterFinished: 86400
       template:
         spec:
           restartPolicy: Never

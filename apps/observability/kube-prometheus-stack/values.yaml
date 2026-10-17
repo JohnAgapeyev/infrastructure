@@ -117,6 +117,22 @@ kube-prometheus-stack:
     # Resolved notifications flow back through the same receiver
     # (send_resolved). Email can be added later as a `continue: true`
     # receiver alongside these routes - additive, no rework.
+    #
+    # Ambient-noise null route (2026-10-17 spam pass) - must precede the
+    # severity routes (first match wins). These chart-default alerts are
+    # either wrong-unit or expected-behavior on this box, so they stay
+    # visible in Prometheus/Grafana but never page the phone:
+    #   NodeFilesystem* - PERCENT thresholds on the 22T /srv array
+    #     (3% = 660G free) fire constantly while the absolute-value
+    #     rules in rules/prometheusrule.yaml (SrvFilesystemNearlyFull
+    #     500G, RootFilesystemNearlyFull 20G) carry the real signal.
+    #   NodeDiskIOSaturation - avg IO queue depth > 10 for 30m:
+    #     that is just "torrenting" here, not actionable.
+    #   NodeSystemSaturation - load > 2x cores for 15m: same.
+    #   NodeMemoryMajorPagesFaults - > 500 major faults/s during IO
+    #     storms on this media box: same.
+    # RAID (NodeRAIDDegraded/NodeRAIDDiskFailure), SMART and mdadm
+    # alerts are NOT matched here - they keep paging.
     config:
       global: {}
       route:
@@ -125,6 +141,9 @@ kube-prometheus-stack:
         routes:
           - matchers:
               - alertname =~ "Watchdog|InfoInhibitor"
+            receiver: "null"
+          - matchers:
+              - alertname =~ "NodeFilesystem(AlmostOutOfSpace|SpaceFillingUp|FilesAlmostOutOfFiles|FilesFillingUp)|NodeDiskIOSaturation|NodeSystemSaturation|NodeMemoryMajorPagesFaults"
             receiver: "null"
           - matchers:
               - severity="critical"

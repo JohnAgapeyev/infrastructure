@@ -27,6 +27,18 @@ spec:
           annotations:
             summary: "/srv below 500 GB free"
             description: "Media array has {{ $value | humanize1024 }} free (< 500 GB). Imports will stall soon."
+        # Absolute-value root rule: the chart's percent-based
+        # NodeFilesystem* alerts are null-routed in values.yaml (wrong
+        # unit on the 22T array), so this carries the / signal instead.
+        # 20 GB: k3s state + prometheus TSDB live on / (SSD, 232 GB).
+        - alert: RootFilesystemNearlyFull
+          expr: node_filesystem_avail_bytes{mountpoint="/"} < 20000000000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "/ below 20 GB free"
+            description: "Root filesystem (SSD: k3s state + prometheus TSDB) has {{ $value | humanize1024 }} free. Compaction/ingest will stall."
         - alert: SmartDeviceUnhealthy
           expr: smartctl_device_smart_status != 1
           for: 0m
@@ -37,12 +49,16 @@ spec:
             description: "smartctl reports non-healthy SMART status for {{ $labels.device }}"
     - name: media
       rules:
+        # 2026-10-17: downgraded critical -> warning. Media *arr/Jellyfin
+        # outages are never wake-worthy ("morning is fine"), and scrape
+        # blips during torrent IO storms made the critical 1h repeat
+        # spam the phone. Warning = quiet 24h repeat + resolves silently.
         - alert: MediaServiceDown
           expr: |
             up{job=~"exportarr-(radarr|sonarr|prowlarr|bazarr)|qbittorrent-exporter|jellyfin"} == 0
           for: 10m
           labels:
-            severity: critical
+            severity: warning
           annotations:
             summary: "{{ $labels.job }} has been down for >10m"
             description: "Prometheus cannot scrape {{ $labels.job }} at {{ $labels.instance }}"

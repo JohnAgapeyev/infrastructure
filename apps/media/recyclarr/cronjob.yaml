@@ -12,6 +12,10 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      # 2026-10-17: see qbit-manage/cronjob.yaml - prevents stale Failed
+      # job objects from paging KubeJobFailed forever (the 2026-10-12
+      # failure spammed alerts until manually deleted).
+      ttlSecondsAfterFinished: 86400
       template:
         spec:
           restartPolicy: Never
