@@ -47,7 +47,10 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
    kubectl -n cloud exec -i deploy/postgres -- psql -v ON_ERROR_STOP=1
    -U nextcloud -d nextcloud`
    and `kubectl -n cloud exec deploy/nextcloud -- runuser -u www-data --
-   php /var/www/html/occ files:scan --all`.
+   php /var/www/html/occ files:scan --all`. If the deployed image tag is
+   NEWER than the dump's version, also run `./scripts/nc-occ.sh upgrade`
+   (subdir-mount instances cannot self-detect the version gap - see
+   operations.md quirks).
 5. `make apply-cluster && make apply-all`
    (kustomize first for namespaces + grafana-admin secret; then helm
    observability). Unbound wildcard host override `*.home.jg-a.com` -> 10.0.0.4 (see tls.md); `make install-cert-manager` before `make apply-cluster` for cert-manager CRDs.
@@ -87,6 +90,9 @@ Re-run the rehearsal after any change to the backup pipeline.
   `gunzip -c /srv/appdata/_snapshots/nextcloud/nextcloud.sql.gz |
   kubectl -n cloud exec -i deploy/postgres -- psql -v ON_ERROR_STOP=1
   -U nextcloud -d nextcloud`;
+  if the deployed image tag is newer than the dump, `./scripts/nc-occ.sh
+  upgrade` next (subdir-mount instances cannot self-detect the gap - see
+  operations.md quirks);
   scale nextcloud back up; `occ files:scan --all` once Ready. Trashbin and
   file versions ride the data dir restore. If restoring into a RUNNING
   instance, `occ maintenance:mode --on` first.

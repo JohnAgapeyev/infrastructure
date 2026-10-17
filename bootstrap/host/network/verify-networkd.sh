@@ -20,7 +20,10 @@ check "network-generator masked, /run/systemd/network empty" \
 
 echo "== addresses / routes / identity =="
 check "IPv4 10.0.0.4/16 on enp5s0"         bash -c 'ip -4 -o addr show dev enp5s0 | grep -q " 10.0.0.4/16 "'
-check "DHCPv6 ::2000/128 on enp5s0"        bash -c 'ip -6 -o addr show dev enp5s0 scope global | grep -q "::2000/128"'
+check "DHCPv6 /128 global on enp5s0"        bash -c 'ip -6 -o addr show dev enp5s0 scope global | grep -q "/128"'
+# (was a hardcoded ::2000 expectation - the OPNsense DHCPv6 lease rotated to
+# ::14a2 on 2026-10-16 (server-side lease reset); harmless: no AAAA records
+# exist anywhere, the DUID identity preservation still pins the IPv4)
 check "IPv4 default via 10.0.0.2"          bash -c 'ip -4 route show default | grep -q "via 10.0.0.2 dev enp5s0"'
 check "IPv6 default route on enp5s0"       bash -c 'ip -6 route show default | grep -q "dev enp5s0"'
 check "enp5s0 is routable"                 bash -c 'networkctl status enp5s0 --no-pager | grep -qE "State: routable"'

@@ -231,9 +231,16 @@ generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
   window with `occ maintenance:mode --on`, snapshot + tar
   `/srv/appdata/nextcloud` + the pg_dump FIRST (Jellyfin-style caution,
   stricter); NC majors also require app-compat checks for
-  memories/calendar/contacts. Minors/patches = merge the Dependabot PR +
-  `make apply-cloud` (pod Recreate re-syncs the app code via the
-  entrypoint).
+  memories/calendar/contacts. Minors/patches = merge the Dependabot PR,
+  `make apply-cloud`, **then `./scripts/nc-occ.sh upgrade`** - MANDATORY:
+  with subdir mounts the entrypoint starts every pod with an empty
+  /var/www/html and takes the "new instance" path, so it CANNOT detect the
+  version change and never runs occ upgrade (2026-10-16: 35.0.2 bump sat in
+  upgrade-limbo - status.php worked but ALL OCS endpoints 503'd, cron
+  refused, the exporter reported maintenance and NextcloudDown fired; the
+  alert within ~10 min of an image bump = you forgot the upgrade step).
+  Rollback = git revert + apply + occ downgrade is NOT supported - restore
+  the pre-update pg_dump + tarball instead (take both before major jumps).
 - **Probes/install envs**: the deployment has NO install envs by design -
   see the deployment.yaml comment (install envs are first-run only;
   steady-state config lives in the mounted config.php, occ-managed).
@@ -267,6 +274,20 @@ generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
 - ServiceMonitors select SERVICES by their metadata labels - a Service
   with no labels is silently never scraped (jellyfin was target-less from
   phase 7 until 2026-09-30; fixed by labelling the Service `app: jellyfin`).
+- Nextcloud image bumps need `./scripts/nc-occ.sh upgrade` after
+  `make apply-cloud` (see the Nextcloud ops section): with subdir mounts
+  the entrypoint cannot see the old version and skips occ upgrade - the
+  instance then serves plain pages fine while ALL OCS endpoints 503,
+  cron.php refuses and the exporter reports maintenance. NextcloudDown
+  firing right after an image bump is exactly this.
+- Post-reboot 2026-10-16 (kernel 7.2.10 + k3s 1.36.5 + new systemd, all
+  in one window): k3s's first start hit "unable to initialize network
+  policy controller: error getting node subnet: failed to get list of
+  links: results may be incomplete or inconsistent" (a netlink dump raced
+  ongoing networkd address/route churn ~2 s after start), crashed once
+  and systemd-restarted into a healthy node within seconds. One data
+  point - if it recurs on the next reboot, add a short settle delay to
+  the k3s drop-in. Matter still recovered 12/12 without manual action.
 - A pod's own Service gets Docker-link-style env vars injected
   (`MATTER_EXPORTER_PORT=tcp://10.43.x.x:9566` for the matter-exporter
   Service). Name script env vars so they cannot collide
