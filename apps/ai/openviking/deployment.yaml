@@ -1,0 +1,64 @@
+# OpenViking context database - Hermes's memory provider (AI-1).
+# Single instance BY DESIGN: the embedded local vector backend holds an
+# exclusive OS file lock on its workspace (`.openviking.lock`) -> replicas: 1
+# + Recreate, and NOTHING else may open /srv/appdata/openviking (the
+# joplin-export job talks HTTP only).
+# The image runs as root (no USER in its Dockerfile) and its entrypoint
+# serves a PENDING health endpoint while waiting for ov.conf, so /health
+# answers from first boot and /ready only once the server is really up.
+# First run: the entrypoint waits for /app/.openviking/ov.conf - kubectl
+# exec in and run `openviking-server init` (operations.md "AI ops"); the
+# server starts by itself the moment the file appears. Steady-state config
+# lives on the hostPath like Nextcloud's config.php (first-run-only
+# wizard; the only secrets in ov.conf are the root key + OpenRouter key).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openviking
+  namespace: ai
+  labels: { app: openviking }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: openviking }
+  template:
+    metadata:
+      labels: { app: openviking }
+    spec:
+      containers:
+        - name: openviking
+          image: ghcr.io/volcengine/openviking:v0.5.0
+          env:
+            # VikingBot off: Hermes is the agent; Bot would need its own
+            # identity config and its own API key (docs: in api_key mode a
+            # root key is not a data credential)
+            - { name: OPENVIKING_WITH_BOT, value: "0" }
+            # defaults from the image ENV; repeated for the next reader
+            - { name: OPENVIKING_CONFIG_FILE, value: /app/.openviking/ov.conf }
+          ports:
+            - { name: http, containerPort: 1933 }
+          # /health = process liveness (also answered by the pending
+          # health server before ov.conf exists); /ready checks AGFS,
+          # vectordb, embedding (the real "can serve" signal)
+          startupProbe:
+            httpGet: { path: /health, port: 1933 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /ready, port: 1933 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 1933 }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            # ov.conf, ovcli.conf and the workspace all live under this one
+            # mount (image default layout - see its Dockerfile)
+            - { name: data, mountPath: /app/.openviking }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/openviking, type: Directory }

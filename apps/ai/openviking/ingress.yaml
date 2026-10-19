@@ -1,0 +1,23 @@
+# Web Studio at /studio + the HTTP API on one ingress. Auth is the
+# OpenViking API-key model itself (root key for /api/v1/admin, user/admin
+# keys for data): the wildcard *.home.jg-a.com TLS cert terminates at
+# Traefik like every other app; no per-ingress secret needed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openviking
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - openviking.home.jg-a.com
+  rules:
+    - host: openviking.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: openviking
+                port: { number: 1933 }

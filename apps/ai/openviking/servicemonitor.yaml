@@ -1,0 +1,16 @@
+# Prometheus scrape of openviking /metrics (AI-5, deployed with the app to
+# keep the target and its netpol in one place). The ServiceMonitor lives in
+# the app's namespace like the home-assistant one (prometheus picks up all
+# ServiceMonitors by design - selectorNilUsesHelmValues: false). Metrics
+# need server.observability.metrics.enabled in ov.conf (see ov.conf.example).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: openviking
+  namespace: ai
+  labels: { app: openviking }
+spec:
+  selector:
+    matchLabels: { app: openviking }
+  endpoints:
+    - { port: http, path: /metrics, interval: 60s }
