@@ -16,10 +16,19 @@
 #                              @openviking/cli installs each run)
 #                      Private ranges excluded so a compromised pod cannot
 #                      pivot to the pod/service CIDRs, LAN, or the API server.
-#   egress, joplin-export only: 10.0.0.4:443 (nextcloud.home.jg-a.com via
-#                      Traefik on the node IP - the WebDAV sync target;
-#                      cloud's ingress policy already trusts kube-system,
-#                      so no cloud.yaml edit is needed for this path)
+#   egress, joplin-export only: Nextcloud WebDAV via Traefik, allowed to
+#                      the whole kube-system namespace on web ports - the
+#                      klipper hostPort DNAT rewrites the dst several
+#                      times (svclb pod -> traefik Service cluster IP ->
+#                      traefik pod) before egress policies evaluate, so a
+#                      selector to kube-system 80/443 covers every hop
+#                      (2026-10-18 lessons: an ipBlock on the node IP
+#                      matches none of the post-NAT destinations; the
+#                      sync had silently synced ZERO notes - joplin
+#                      reports "Completed" on ECONNREFUSED; check the
+#                      profile DB, not stdout; see operations.md quirks
+#                      for the k3s controller wiring bug + the aged-pod
+#                      testing procedure)
 #   ingress, all pods:
 #     - same-namespace  hermes <-> openviking calls above
 #     - kube-system    traefik (hermes dashboard + openviking studio/API
@@ -98,9 +107,18 @@ spec:
         - { protocol: TCP, port: 443 }
 ---
 # Nextcloud WebDAV for the Joplin CLI sync client: the public hostname
-# resolves (Unbound wildcard) to the node IP, where Traefik's hostPort
-# DNAT forwards into the cloud ns - which already allows ingress from
-# kube-system. Only this pod may talk to the LAN at all.
+# resolves (Unbound wildcard) to the node IP, then klipper hostPort DNAT
+# rewrites the destination multiple times (svclb pod -> traefik SERVICE
+# cluster IP -> traefik pod) before egress policies evaluate. Instead of
+# chasing each post-NAT destination (2026-10-18: ipBlock on the node IP
+# and on the svc IP each matched only sometimes - the k3s embedded policy
+# controller programs multi-destination/ipBlock rules nondeterministi-
+# cally across pod events; ECONNREFUSED = its REJECT), the allow covers
+# the whole kube-system namespace on web ports: every hop of the
+# Traefik path lives there (svclb + traefik), the shape mirrors the
+# proven cloud.yaml selector rules, and 80/443 only limits the pod's
+# reach to web endpoints. NOTE joplin reports "Completed" with zero
+# items on connection errors - check the profile DB, not stdout.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -112,10 +130,11 @@ spec:
   policyTypes: [Egress]
   egress:
     - to:
-        - ipBlock:
-            cidr: 10.0.0.4/32
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
       ports:
         - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 80 }
 ---
 # Ingress: same-ns, kube-system (traefik), observability (prometheus).
 apiVersion: networking.k8s.io/v1

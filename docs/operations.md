@@ -445,6 +445,25 @@ directory; no NC service account or share exists.
   before the first output line. Limit is now 2Gi and the npm output is
   never silenced (empty logs made the failure point indistinguishable,
   2026-10-18).
+- k3s netpol controller (AI phase, 2026-10-18): after applying the ai
+  namespace policies, the controller built the
+  `ai-egress-joplin-nextcloud` iptables chain but NEVER wired it into
+  any per-pod `KUBE-POD-FW-*` chain - the policy was a silent no-op and
+  the joplin sync got ECONNREFUSED for ~40 min. Deleting + recreating
+  the policies did NOT unwedge it; `sudo systemctl restart k3s` did
+  (pods survive; API blips ~20 s - the same routine step as a version
+  upgrade). Inspect with a privileged hostNetwork pod
+  (`iptables-save | grep -E 'KUBE-POD-FW|NWPLCY'`).
+- k3s netpol enforcement LAGS pod creation by seconds: a fresh pod has
+  no `KUBE-POD-FW-*` chain yet and is effectively UNRESTRICTED until the
+  controller catches up - which made instant one-shot curl test pods
+  "pass" while the real (longer-lived) sync pods failed the same rule.
+  Any netpol verification must use a pod that has existed ~45 s+.
+- Joplin CLI 3.7.1 sync: connection errors do NOT fail the sync - it
+  logs `[error] FetchError ... ECONNREFUSED` in profile/log.txt, prints
+  "Completed" on stdout and finishes with zero items. Verify ingestion
+  via `sqlite3 /srv/appdata/joplin-cli/profile/database.sqlite 'select
+  count(*) from notes'`, never via the sync's exit status or stdout.
 - This operator version discovers ServiceMonitor endpoints via v1
   Endpoints only: a selectorless Service with just a hand-written
   EndpointSlice produces NO scrape target (silently - the job appears in
