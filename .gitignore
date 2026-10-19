@@ -47,6 +47,7 @@ terraform.rc
 secrets/*.env
 secrets/*.yml
 secrets/*.yaml
+secrets/*.conf
 
 # Helm chart vendoring
 charts/

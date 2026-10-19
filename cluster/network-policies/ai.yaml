@@ -1,0 +1,135 @@
+# Default-deny + explicit allows for the ai namespace (Hermes gateway,
+# OpenViking server, joplin-export CronJob). Same threat model and style
+# as cloud.yaml: a compromised pod pivoting to other cluster services or
+# the LAN; k3s enforces via its bundled network policy controller.
+#
+# Flow inventory this encodes:
+#   egress, all pods:
+#     - DNS            kube-dns (kube-system), UDP/TCP 53
+#     - same-namespace  hermes -> openviking:1933 (memory provider plugin),
+#                      joplin-export -> openviking:1933 (ov add-resource)
+#   egress, hermes + openviking + joplin-export: internet TCP 443
+#                      hermes: OpenRouter (chat model) + first-start plugin
+#                              lazy-installs (allow_lazy_installs default)
+#                      openviking: OpenRouter (embedding + VLM)
+#                      joplin-export: registry.npmjs.org (pinned joplin +
+#                              @openviking/cli installs each run)
+#                      Private ranges excluded so a compromised pod cannot
+#                      pivot to the pod/service CIDRs, LAN, or the API server.
+#   egress, joplin-export only: 10.0.0.4:443 (nextcloud.home.jg-a.com via
+#                      Traefik on the node IP - the WebDAV sync target;
+#                      cloud's ingress policy already trusts kube-system,
+#                      so no cloud.yaml edit is needed for this path)
+#   ingress, all pods:
+#     - same-namespace  hermes <-> openviking calls above
+#     - kube-system    traefik (hermes dashboard + openviking studio/API
+#                      ingresses - ALL client traffic arrives via traefik)
+#     - observability  prometheus scrapes openviking /metrics (ServiceMonitor
+#                      lives in this ns, home-assistant precedent)
+#   NOTE: NO ai pod mounts or addresses /srv/appdata/nextcloud-data, and
+#   none reaches the cloud ns directly - the owner's Joplin notes are read
+#   through the official Joplin CLI over WebDAV (joplin-export) or through
+#   OpenViking. Nothing in this namespace talks to Nextcloud except
+#   joplin-export over HTTPS via Traefik.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-default-deny
+  namespace: ai
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# DNS egress for every ai pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-egress-dns
+  namespace: ai
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Same-namespace traffic (hermes -> openviking, joplin-export -> openviking).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-egress-same-namespace
+  namespace: ai
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {}
+---
+# Internet 443 for the three app pods (see header). Private ranges
+# excluded like cloud-egress-nextcloud-web-smtp.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-egress-internet-https
+  namespace: ai
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app, operator: In, values: [hermes, openviking, joplin-export] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8      # LAN + pod (10.42/16) + service (10.43/16) CIDRs
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - { protocol: TCP, port: 443 }
+---
+# Nextcloud WebDAV for the Joplin CLI sync client: the public hostname
+# resolves (Unbound wildcard) to the node IP, where Traefik's hostPort
+# DNAT forwards into the cloud ns - which already allows ingress from
+# kube-system. Only this pod may talk to the LAN at all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-egress-joplin-nextcloud
+  namespace: ai
+spec:
+  podSelector:
+    matchLabels: { app: joplin-export }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.4/32
+      ports:
+        - { protocol: TCP, port: 443 }
+---
+# Ingress: same-ns, kube-system (traefik), observability (prometheus).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-ingress-allowed
+  namespace: ai
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: observability }
