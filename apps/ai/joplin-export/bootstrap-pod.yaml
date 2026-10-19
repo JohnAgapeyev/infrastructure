@@ -1,0 +1,43 @@
+# ONE-OFF: first full `joplin sync` (the CronJob's 300s deadline is sized
+# for steady-state incremental syncs; the first full download of a large
+# vault can exceed it). Applies the same config as run.sh against the
+# shared profile on the hostPath, with no deadline. Apply once, wait for
+# Succeeded, delete; afterwards the CronJob's incremental runs fit easily.
+#   kubectl apply -f apps/ai/joplin-export/bootstrap-pod.yaml
+#   kubectl -n ai wait --for=condition=Ready pod/joplin-sync-bootstrap ...
+#   kubectl -n ai logs -f joplin-sync-bootstrap   # then delete the pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: joplin-sync-bootstrap
+  namespace: ai
+  labels: { app: joplin-export }
+spec:
+  restartPolicy: Never
+  securityContext: { runAsUser: 1000, runAsGroup: 1000 }
+  containers:
+    - name: sync
+      image: node:24.22.0-bookworm-slim
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          export PATH=/work/state/npm/bin:$PATH
+          joplin --profile /work/state/profile config sync.target 6
+          joplin --profile /work/state/profile config sync.6.path "$JOPLIN_SYNC_URL"
+          joplin --profile /work/state/profile config sync.6.username "$JOPLIN_NC_USER"
+          joplin --profile /work/state/profile config sync.6.password "$JOPLIN_NC_APP_PASSWORD"
+          joplin --profile /work/state/profile sync
+      env:
+        - { name: HOME, value: /work/state }
+      envFrom:
+        - secretRef: { name: joplin-env }
+      resources:
+        requests: { cpu: 100m, memory: 512Mi }
+        limits: { memory: 2Gi }
+      volumeMounts:
+        - { name: state, mountPath: /work/state }
+  volumes:
+    - name: state
+      hostPath: { path: /srv/appdata/joplin-cli, type: Directory }

@@ -337,9 +337,9 @@ directory; no NC service account or share exists.
   7 Dropbox / 8 S3 - run.sh uses 6 (WebDAV) + the full dav URL.
 - The FIRST `joplin sync` downloads the whole vault and can exceed the
   job's 300s deadline (steady-state syncs are seconds). Bootstrap it
-  once with `/tmp/opencode/joplin-sync-bootstrap.yaml` (a one-off pod
-  running just config+sync against the shared profile - or any pod with
-  the same mounts), then let the CronJob take over.
+  once with `apps/ai/joplin-export/bootstrap-pod.yaml` (a one-off pod
+  running just config+sync against the shared profile), then let the
+  CronJob take over.
 - `ov tree viking://resources/joplin` mirrors notebook folders with
   title-named files; edit a desktop note -> next job runs re-embed it;
   delete one in Joplin -> it drops out of the resource.
@@ -445,25 +445,38 @@ directory; no NC service account or share exists.
   before the first output line. Limit is now 2Gi and the npm output is
   never silenced (empty logs made the failure point indistinguishable,
   2026-10-18).
-- k3s netpol controller (AI phase, 2026-10-18): after applying the ai
-  namespace policies, the controller built the
-  `ai-egress-joplin-nextcloud` iptables chain but NEVER wired it into
-  any per-pod `KUBE-POD-FW-*` chain - the policy was a silent no-op and
-  the joplin sync got ECONNREFUSED for ~40 min. Deleting + recreating
-  the policies did NOT unwedge it; `sudo systemctl restart k3s` did
-  (pods survive; API blips ~20 s - the same routine step as a version
-  upgrade). Inspect with a privileged hostNetwork pod
-  (`iptables-save | grep -E 'KUBE-POD-FW|NWPLCY'`).
-- k3s netpol enforcement LAGS pod creation by seconds: a fresh pod has
-  no `KUBE-POD-FW-*` chain yet and is effectively UNRESTRICTED until the
-  controller catches up - which made instant one-shot curl test pods
-  "pass" while the real (longer-lived) sync pods failed the same rule.
-  Any netpol verification must use a pod that has existed ~45 s+.
+- k3s netpol + Traefik paths (AI phase, 2026-10-18 - THE big one): an
+  egress allow for traffic dialed to `*.home.jg-a.com` must include
+  Traefik's CONTAINER ports - the k3s traefik chart maps svc 443 ->
+  targetPort 8443 and svc 80 -> 8080, and the DNAT chain delivers the
+  packet to the traefik POD with the CONTAINER port before the egress
+  policy evaluates. Allowing only 443/80 rejects every enforced
+  connection. Diagnosis gold: capture the policy chains' own NFLOG
+  drops from a privileged hostNetwork pod (`tcpdump -i nflog:100`)
+  while connecting - it shows the true post-NAT dst:port.
+- k3s netpol enforcement LAGS pod creation by seconds-to-a-minute: a
+  fresh pod has no KUBE-POD-FW-* chain yet and is effectively
+  UNRESTRICTED, then gets enforced. This made quick one-shot curl test
+  pods "pass" a broken rule for hours while real (longer-lived) pods
+  failed it - and made the failure look image- or uid-dependent, and
+  made `sudo systemctl restart k3s` look like the fix (the state after
+  any restart/churn re-runs the same race). VERIFY NETPOL ONLY WITH A
+  POD THAT HAS EXISTED 45s+ (test procedure: `apps/ai/joplin-export/`
+  net-canary pod pattern).
 - Joplin CLI 3.7.1 sync: connection errors do NOT fail the sync - it
-  logs `[error] FetchError ... ECONNREFUSED` in profile/log.txt, prints
-  "Completed" on stdout and finishes with zero items. Verify ingestion
-  via `sqlite3 /srv/appdata/joplin-cli/profile/database.sqlite 'select
+  logs `[error] FetchError ...` in profile/log.txt, prints "Completed"
+  on stdout and finishes with zero items. Verify ingestion via
+  `sqlite3 /srv/appdata/joplin-cli/profile/database.sqlite 'select
   count(*) from notes'`, never via the sync's exit status or stdout.
+- Joplin sync-target item corruption (2026-10-18, upstream #15757):
+  a single malformed item on the target (ours: the WebClipper.png
+  resource of the default Welcome note, written by the desktop 3.7.18
+  auto-upgrade's delta format) aborts the whole fetch step on OTHER
+  clients with `Missing required property: type_`. Fix (maintainer-
+  endorsed): on the WORKING client (desktop), search `id:<item-id>` to
+  locate the note, delete the note (or attachment) + empty the trash +
+  sync - all other clients then sync cleanly. The */5 CronJob stays
+  suspended (live patch) until this is done.
 - This operator version discovers ServiceMonitor endpoints via v1
   Endpoints only: a selectorless Service with just a hand-written
   EndpointSlice produces NO scrape target (silently - the job appears in

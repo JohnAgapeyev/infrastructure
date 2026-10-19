@@ -108,17 +108,16 @@ spec:
 ---
 # Nextcloud WebDAV for the Joplin CLI sync client: the public hostname
 # resolves (Unbound wildcard) to the node IP, then klipper hostPort DNAT
-# rewrites the destination multiple times (svclb pod -> traefik SERVICE
-# cluster IP -> traefik pod) before egress policies evaluate. Instead of
-# chasing each post-NAT destination (2026-10-18: ipBlock on the node IP
-# and on the svc IP each matched only sometimes - the k3s embedded policy
-# controller programs multi-destination/ipBlock rules nondeterministi-
-# cally across pod events; ECONNREFUSED = its REJECT), the allow covers
-# the whole kube-system namespace on web ports: every hop of the
-# Traefik path lives there (svclb + traefik), the shape mirrors the
-# proven cloud.yaml selector rules, and 80/443 only limits the pod's
-# reach to web endpoints. NOTE joplin reports "Completed" with zero
-# items on connection errors - check the profile DB, not stdout.
+# and kube-proxy rewrite the destination to the TRAEFIK POD and its
+# CONTAINER ports (svc 443 -> targetPort 8443, svc 80 -> 8080 - the k3s
+# traefik chart's standard mapping) before egress policies evaluate.
+# THE 2026-10-18 SAGA, settled by capturing the policy chains' own
+# NFLOG drops: the allow must cover the FINAL post-NAT destination port
+# (8443/8080) - 443/80 alone meant every enforced connection to Traefik
+# was rejected while never-enforced pods (fresh, chain not yet built -
+# netpol lags pod creation by seconds) sailed through and muddied the
+# diagnosis. joplin also reports "Completed" with zero items on
+# connection errors - check the profile DB, not stdout.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -133,8 +132,12 @@ spec:
         - namespaceSelector:
             matchLabels: { kubernetes.io/metadata.name: kube-system }
       ports:
+        # svc ports as dialed...
         - { protocol: TCP, port: 443 }
         - { protocol: TCP, port: 80 }
+        # ...and the traefik container ports the DNAT delivers to
+        - { protocol: TCP, port: 8443 }
+        - { protocol: TCP, port: 8080 }
 ---
 # Ingress: same-ns, kube-system (traefik), observability (prometheus).
 apiVersion: networking.k8s.io/v1
