@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - cronjob.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  # the job script, embedded from run.sh (single source of truth)
+  - name: joplin-export-script
+    namespace: ai
+    files:
+      - run.sh=run.sh
+secretGenerator:
+  # WebDAV sync creds for the official Joplin CLI (app password)
+  - name: joplin-env
+    namespace: ai
+    env: ../../../secrets/joplin.env
+    type: Opaque
+  # ov CLI connection (user API key). Mounted read-only; the job copies it
+  # to a writable location because `ov language` writes to the config.
+  - name: ovcli-conf
+    namespace: ai
+    files:
+      - ovcli.conf=../../../secrets/ovcli.conf

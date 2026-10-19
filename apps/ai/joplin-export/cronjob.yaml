@@ -1,0 +1,78 @@
+# Joplin -> OpenViking ingestion (AI-2). ~Every 5 min: official Joplin CLI
+# sync (as one more client of the owner's Nextcloud WebDAV target) ->
+# clean markdown export -> ov add-resource upsert into
+# viking://resources/joplin. See run.sh for the pipeline and version pins.
+#
+# Cadence rationale (D5): the Joplin sync protocol is poll-based - the
+# owner's desktop client polls Nextcloud on an interval, and so must this
+# client. A no-change run is one WebDAV PROPFIND + a cheap upsert.
+# concurrencyPolicy: Forbid + activeDeadlineSeconds bound overlap with the
+# desktop's .lock; pods are labeled app: joplin-export (NOT anything the
+# openviking Service selects) and are the ONLY ai pods allowed to talk to
+# the LAN (10.0.0.4:443, the Traefik entry for nextcloud.home.jg-a.com).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: joplin-export
+  namespace: ai
+  labels: { app: joplin-export }
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  # auto-delete finished jobs (qbit-manage precedent: a lone Failed job
+  # would page KubeJobFailed forever otherwise)
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400
+      # hard bound: npm install + sync + export + upsert must fit; a run
+      # that overruns is killed (leaving the desktop's .lock alone)
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: { app: joplin-export }
+        spec:
+          restartPolicy: Never
+          securityContext:
+            # node image's "node" user; owns /srv/appdata/joplin-cli and
+            # /srv/appdata/joplin-export (phase-ai0.sh). npm prefix +
+            # joplin profile + npm cache all live under the state dir, so
+            # nothing is installed into /usr/local (no root needed).
+            runAsUser: 1000
+            runAsGroup: 1000
+          containers:
+            - name: joplin-export
+              image: node:24.22.0-bookworm-slim
+              command: ["bash", "/work/scripts/run.sh"]
+              env:
+                # npm prefix binaries first (joplin, ov)
+                - { name: PATH, value: "/work/state/npm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" }
+                - { name: HOME, value: /work/state }
+                - { name: NPM_PREFIX, value: /work/state/npm }
+                - { name: NPM_CONFIG_CACHE, value: /work/state/npm-cache }
+                - { name: JOPLIN_PROFILE, value: /work/state/profile }
+                - { name: JOPLIN_EXPORT_DIR, value: /work/export }
+                - { name: OPENVIKING_CLI_CONFIG_FILE, value: /work/state/ovcli.conf }
+              envFrom:
+                - secretRef: { name: joplin-env }
+              resources:
+                requests: { cpu: 100m, memory: 256Mi }
+                limits: { memory: 512Mi }
+              volumeMounts:
+                - { name: state, mountPath: /work/state }
+                - { name: export, mountPath: /work/export }
+                - { name: scripts, mountPath: /work/scripts, readOnly: true }
+                - { name: ovcli, mountPath: /work/secrets, readOnly: true }
+          volumes:
+            - name: state
+              hostPath: { path: /srv/appdata/joplin-cli, type: Directory }
+            - name: export
+              hostPath: { path: /srv/appdata/joplin-export, type: Directory }
+            - name: scripts
+              configMap: { name: joplin-export-script }
+            - name: ovcli
+              secret:
+                secretName: ovcli-conf
+                items:
+                  - { key: ovcli.conf, path: ovcli.conf }
