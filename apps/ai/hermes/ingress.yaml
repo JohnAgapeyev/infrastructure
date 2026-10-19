@@ -1,0 +1,26 @@
+# Dashboard ingress. Auth = the dashboard's own basic-auth gate
+# (username/password from the hermes-dashboard Secret) on top of the LAN
+# TLS wildcard - same posture as the other web UIs (no HSTS middleware;
+# that is a Nextcloud admin-scan requirement, not a general one).
+# In the profile's config.yaml (on the hostPath, first-run): dashboard
+# public_url https://hermes.home.jg-a.com + trusted_proxies bounded to the
+# pod CIDR - see operations.md "AI ops".
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hermes
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - hermes.home.jg-a.com
+  rules:
+    - host: hermes.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hermes
+                port: { number: 9119 }

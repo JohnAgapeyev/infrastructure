@@ -1,0 +1,68 @@
+# Hermes Agent gateway (Nous Research) - AI-3.
+# The image ENTRYPOINT is an s6-overlay dispatcher; `gateway run` passed as
+# args becomes the supervised main service, with the web dashboard
+# supervised alongside it (HERMES_DASHBOARD=1). s6 needs the container to
+# own PID 1 - true for a plain k8s container (no shareProcessNamespace).
+# The gateway runs even with NO messaging platform configured: the
+# dashboard and `hermes chat` inside the container are the front ends
+# (D8: web dashboard only).
+# All state (config.yaml, .env, sessions, memories, skills, state.db) is
+# /opt/data -> /srv/appdata/hermes. First boot seeds it and the entrypoint
+# chowns it (runtime user UID 10000); first-run setup (model, openviking
+# plugin, memory provider) is interactive kubectl exec - operations.md
+# "AI ops". NEVER run two gateways on one data dir -> replicas: 1 +
+# Recreate.
+# The OpenAI-compatible API server (8642) stays OFF: the dashboard needs
+# only 9119, and every extra listener is attack surface.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes
+  namespace: ai
+  labels: { app: hermes }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: hermes }
+  template:
+    metadata:
+      labels: { app: hermes }
+    spec:
+      containers:
+        - name: hermes
+          image: nousresearch/hermes-agent:v0.22.2
+          args: ["gateway", "run"]
+          env:
+            - { name: HERMES_DASHBOARD, value: "1" }
+            - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
+              valueFrom: { secretKeyRef: { name: hermes-dashboard, key: HERMES_DASHBOARD_BASIC_AUTH_USERNAME } }
+            - name: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
+              valueFrom: { secretKeyRef: { name: hermes-dashboard, key: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD } }
+            - name: HERMES_DASHBOARD_BASIC_AUTH_SECRET
+              valueFrom: { secretKeyRef: { name: hermes-dashboard, key: HERMES_DASHBOARD_BASIC_AUTH_SECRET } }
+          ports:
+            - { name: http, containerPort: 9119 }
+          # tcpSocket (not httpGet): the dashboard answers HTTP but its
+          # auth-gate redirects are not a stable probe contract; a
+          # listening 9119 is the honest liveness signal for the
+          # supervised gateway+dashboard pair (s6 restarts either inside
+          # the container without a pod restart)
+          startupProbe:
+            tcpSocket: { port: 9119 }
+            periodSeconds: 10
+            failureThreshold: 90
+          readinessProbe:
+            tcpSocket: { port: 9119 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 9119 }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - { name: data, mountPath: /opt/data }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/hermes, type: Directory }

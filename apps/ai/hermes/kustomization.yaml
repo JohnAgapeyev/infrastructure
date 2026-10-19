@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  # Dashboard basic auth is MANDATORY on the container's non-loopback bind
+  # (upstream hardening; the loopback/no-auth escape hatch was removed).
+  # The OpenRouter/OpenViking keys are NOT here - they live in Hermes's own
+  # /opt/data/.env, written during first-run setup.
+  - name: hermes-dashboard
+    namespace: ai
+    env: ../../../secrets/hermes.env
+    type: Opaque

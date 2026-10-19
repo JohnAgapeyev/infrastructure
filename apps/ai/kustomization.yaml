@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - openviking
   - joplin-export
+  - hermes
