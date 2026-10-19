@@ -3,14 +3,19 @@
 # exclusive OS file lock on its workspace (`.openviking.lock`) -> replicas: 1
 # + Recreate, and NOTHING else may open /srv/appdata/openviking (the
 # joplin-export job talks HTTP only).
-# The image runs as root (no USER in its Dockerfile) and its entrypoint
-# serves a PENDING health endpoint while waiting for ov.conf, so /health
-# answers from first boot and /ready only once the server is really up.
-# First run: the entrypoint waits for /app/.openviking/ov.conf - kubectl
-# exec in and run `openviking-server init` (operations.md "AI ops"); the
-# server starts by itself the moment the file appears. Steady-state config
-# lives on the hostPath like Nextcloud's config.php (first-run-only
-# wizard; the only secrets in ov.conf are the root key + OpenRouter key).
+# The image runs as root (no USER in its Dockerfile). Its entrypoint WATCHES
+# for /app/.openviking/ov.conf and starts the server BY ITSELF the moment
+# the file appears - NEVER run `openviking-server` manually inside the pod
+# (it collides with the managed one: port 1933 + the workspace lock;
+# 2026-10-18 lesson). While ov.conf is missing, the image's PENDING health
+# server answers every request - including /health - with 503, so the
+# startup probe deliberately allows a 30-minute window for the interactive
+# `openviking-server init` wizard (300s killed the container 3x mid-wizard
+# and aborted the exec session each time).
+# First run: `kubectl exec` in, run `openviking-server init`
+# (operations.md "AI ops"); steady-state config lives on the hostPath like
+# Nextcloud's config.php (first-run-only wizard; the only secrets in
+# ov.conf are the root key + OpenRouter key).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,13 +43,16 @@ spec:
             - { name: OPENVIKING_CONFIG_FILE, value: /app/.openviking/ov.conf }
           ports:
             - { name: http, containerPort: 1933 }
-          # /health = process liveness (also answered by the pending
-          # health server before ov.conf exists); /ready checks AGFS,
-          # vectordb, embedding (the real "can serve" signal)
+          # /health = process liveness. NOTE: it answers 503 the whole
+          # time ov.conf is missing (the pending health server - probes
+          # and humans are meant to see "waiting for config"), so the
+          # startup grace must cover the interactive init session:
+          # 180 x 10s = 30 min. /ready is the real "can serve" signal
+          # (AGFS/vectordb/embedding checks).
           startupProbe:
             httpGet: { path: /health, port: 1933 }
             periodSeconds: 10
-            failureThreshold: 30
+            failureThreshold: 180
           readinessProbe:
             httpGet: { path: /ready, port: 1933 }
             periodSeconds: 10

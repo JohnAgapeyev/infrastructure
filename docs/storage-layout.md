@@ -48,6 +48,8 @@ All app state lives on `/srv` (RAID).
   (note database, settings) + persistent npm prefix/cache for the
   joplin-export CronJob. Owned 1000:1000 (= the node image "node" user;
   NOTE host uid 1000 is also john - the owner can inspect it directly).
+  The `npm/` + `npm-cache/` subtrees (~400 MB of pinned CLI installs) are
+  regenerable on the next job run and excluded from the B2 sync.
 - `/srv/appdata/joplin-export` - the clean markdown export tree (one dir
   per notebook, title-named files). Fully regenerable (next job run
   rebuilds it); excluded from the B2 sync on purpose.

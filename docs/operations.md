@@ -287,16 +287,33 @@ directory; no NC service account or share exists.
    excludes: hermes/state.db, joplin-cli profile db, openviking *.db,
    joplin-export/**) - the drop-in on the host does not update itself.
 4. `make apply-cluster` (ai ns + netpols) and `make apply-ai`.
-5. OpenViking first run (interactive, one-off):
-   `kubectl -n ai exec -it deploy/openviking -- openviking-server init`
-   - answer per `apps/ai/openviking/ov.conf.example` (OpenRouter for both
-   models; set `root_api_key` = `openssl rand -hex 32`). The server
-   starts the moment ov.conf exists. Then
-   `kubectl -n ai exec deploy/openviking -- openviking-server doctor`.
-   Create the account + `john` user (Studio -> Settings, or `ov admin
-   register-user` with the root key) and mint a USER API key; record
-   everything in `secrets/openviking.env`, put the user key + URL in
-   `secrets/ovcli.conf` (`make apply-ai` re-renders the ovcli Secret).
+5. OpenViking first run (interactive, one-off). **Never start the server
+   manually** - the image entrypoint watches for ov.conf and starts it BY
+   ITSELF the moment the file exists (a manual `openviking-server` inside
+   the pod just collides with the running one: port 1933 + the exclusive
+   workspace lock - 2026-10-18 lesson).
+   a. `kubectl -n ai exec -it deploy/openviking -- openviking-server init`
+      - answer per `apps/ai/openviking/ov.conf.example` (OpenRouter for
+      both models; set `root_api_key` = `openssl rand -hex 32`). The
+      startup probe allows a 30-minute wizard window.
+   b. Verify: `curl https://openviking.home.jg-a.com/health` ->
+      `"healthy":true` and `/ready` -> all checks `"ok"`.
+   c. Create the account + yourself as its admin user - ONE call with the
+      ROOT key; the response contains the USER key (it is shown only
+      this once). Keep both out of chat/logs:
+      ```
+      curl -X POST https://openviking.home.jg-a.com/api/v1/admin/accounts \
+        -H "X-API-Key: <ROOT_KEY>" -H "Content-Type: application/json" \
+        -d '{"account_id": "home", "admin_user_id": "john"}'
+      ```
+      (Studio instead: open `/studio`, save the root key in Settings,
+      create the account/user under Users - same result, key displayed
+      there.) A root key cannot read/write data - the user key is what
+      Hermes, the ov CLI and Studio day-to-day use.
+   d. Record: root key + user key -> `secrets/openviking.env`; user key
+      -> `secrets/ovcli.conf` (`api_key` field); then `make apply-ai` -
+      it re-renders the ovcli-conf Secret AND un-suspends the joplin-export
+      CronJob (suspend during setup is a live patch only, see step 7).
 6. Hermes first run (interactive, one-off):
    `kubectl -n ai exec -it deploy/hermes -- hermes model` -> OpenRouter
    (+ key; >=64K-context model); then `hermes plugins install openviking
@@ -306,11 +323,23 @@ directory; no NC service account or share exists.
    profile's `config.yaml` add `dashboard.public_url:
    https://hermes.home.jg-a.com` + `dashboard.trusted_proxies:
    ["10.42.0.0/16"]`.
+7. While `secrets/ovcli.conf` still holds a placeholder, the
+   joplin-export CronJob is suspended so it does not fail on the ov
+   upsert every 5 minutes:
+   `kubectl -n ai patch cronjob joplin-export -p '{"spec":{"suspend":true}}'`
+   (`make apply-ai` un-suspends it - suspend is not in git).
 
 ### First live-run VERIFY items
 
-- joplin CLI headless (`run.sh` header): config-by-command works, sync
-  pulls, `export --format md` into a fresh dir succeeds.
+- VERIFIED 2026-10-18: joplin 3.7.1 has NO `--non-interactive` flag
+  (one-shot commands are non-interactive anyway), and its sync-target
+  enum is 0 None / 2 FS / 3 OneDrive / 5 Nextcloud / **6 WebDAV** /
+  7 Dropbox / 8 S3 - run.sh uses 6 (WebDAV) + the full dav URL.
+- The FIRST `joplin sync` downloads the whole vault and can exceed the
+  job's 300s deadline (steady-state syncs are seconds). Bootstrap it
+  once with `/tmp/opencode/joplin-sync-bootstrap.yaml` (a one-off pod
+  running just config+sync against the shared profile - or any pod with
+  the same mounts), then let the CronJob take over.
 - `ov tree viking://resources/joplin` mirrors notebook folders with
   title-named files; edit a desktop note -> next job runs re-embed it;
   delete one in Joplin -> it drops out of the resource.
@@ -404,6 +433,18 @@ directory; no NC service account or share exists.
   fails with a confusing "no matches for kind ServiceMonitor" that looks
   like a missing CRD. (kustomize + apply won't catch it; a server
   dry-run will.)
+- OpenViking (AI phase): the image entrypoint AUTO-STARTS the server the
+  moment ov.conf appears - a manual `openviking-server` inside the pod
+  fails on the port/workspace lock (the "error" is benign; the managed
+  server is fine). Its pending health server answers 503 on /health
+  while waiting for ov.conf BY DESIGN, so the startup probe window must
+  cover the interactive `init` session (30 min; 300s killed the container
+  3x mid-wizard and aborted the exec each time, 2026-10-18).
+- joplin-export (AI phase): `npm install joplin` (sharp native deps)
+  OOMKilled every run at a 512Mi limit with completely EMPTY logs - died
+  before the first output line. Limit is now 2Gi and the npm output is
+  never silenced (empty logs made the failure point indistinguishable,
+  2026-10-18).
 - This operator version discovers ServiceMonitor endpoints via v1
   Endpoints only: a selectorless Service with just a hand-written
   EndpointSlice produces NO scrape target (silently - the job appears in

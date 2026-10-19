@@ -14,10 +14,13 @@
 # limitation as K3S_VERSION).
 #
 # VERIFY items for the first live run (checked against Joplin CLI docs):
-# - `joplin --profile <dir> config <key> <value>` writes settings.sqlite
-#   in the profile; sync.target 4 = WebDAV (sync.4.* keys)
-# - `--non-interactive` keeps sync/export prompt-free
-# - `export --format md` into a NOT-yet-existing dir (hence "$TMP/out")
+# - one-shot commands are non-interactive BY DEFAULT; there is NO global
+#   --non-interactive flag (2026-10-18: "Unknown flag: --non-interactive")
+# - sync target numbering, verified against joplin 3.7.1's own enum
+#   (2026-10-18): 0 None, 2 File system, 3 OneDrive, 5 Nextcloud,
+#   6 WebDAV, 7 Dropbox, 8 S3, 9/10/11 Joplin Server/Cloud/SAML.
+#   WebDAV (6) + the full dav URL from JOPLIN_SYNC_URL is the direct
+#   mapping of the desktop client's config.
 set -euo pipefail
 
 JOPLIN_CLI_VERSION="3.7.1"
@@ -27,9 +30,17 @@ OV_CLI_VERSION="0.4.23"
 rm -rf /work/state/.export.* || true
 
 # 1. install pinned CLIs into the persistent npm prefix (repeat runs hit
-#    the cache; ~30s cold, near-instant warm)
+#    the cache; ~30s cold, near-instant warm). Output NOT silenced:
+#    2026-10-18 lesson - an OOM here leaves completely empty job logs.
 npm install -g --prefix "$NPM_PREFIX" --no-audit --no-fund \
-  "joplin@${JOPLIN_CLI_VERSION}" "@openviking/cli@${OV_CLI_VERSION}" >/dev/null
+  "joplin@${JOPLIN_CLI_VERSION}" "@openviking/cli@${OV_CLI_VERSION}"
+
+# 1b. some npm tarballs ship JS bin entry points WITHOUT the exec bit
+#     (seen 2026-10-18: @openviking/cli bin/ov.mjs 644 -> "Permission
+#     denied"); resolve each bin symlink and fix the bit ourselves
+for link in "$NPM_PREFIX"/bin/*; do
+  [ -L "$link" ] && chmod +x -- "$(readlink -f "$link")" 2>/dev/null || true
+done
 
 # 2. ov CLI config: the Secret mount is read-only and `ov language`
 #    writes to the config file - copy it into the writable state dir first
@@ -37,18 +48,19 @@ cp /work/secrets/ovcli.conf "$OPENVIKING_CLI_CONFIG_FILE"
 ov language en
 
 # 3. Joplin CLI: configure (idempotent) + sync as an additional WebDAV
-#    client of the same target the desktop/mobile clients use
-joplin --profile "$JOPLIN_PROFILE" --non-interactive config sync.target 4
-joplin --profile "$JOPLIN_PROFILE" --non-interactive config sync.4.path "$JOPLIN_SYNC_URL"
-joplin --profile "$JOPLIN_PROFILE" --non-interactive config sync.4.username "$JOPLIN_NC_USER"
-joplin --profile "$JOPLIN_PROFILE" --non-interactive config sync.4.password "$JOPLIN_NC_APP_PASSWORD"
-joplin --profile "$JOPLIN_PROFILE" --non-interactive sync
+#    client of the same target the desktop/mobile clients use. One-shot
+#    commands are non-interactive by themselves. WebDAV = target 6.
+joplin --profile "$JOPLIN_PROFILE" config sync.target 6
+joplin --profile "$JOPLIN_PROFILE" config sync.6.path "$JOPLIN_SYNC_URL"
+joplin --profile "$JOPLIN_PROFILE" config sync.6.username "$JOPLIN_NC_USER"
+joplin --profile "$JOPLIN_PROFILE" config sync.6.password "$JOPLIN_NC_APP_PASSWORD"
+joplin --profile "$JOPLIN_PROFILE" sync
 
 # 4. export to a fresh temp dir, then REPLACE the visible export tree
 #    (only reader is step 5, which runs strictly after the swap; deletions
 #    must reach step 5, hence the full replace - no stale leftovers)
 TMP=$(mktemp -d /work/state/.export.XXXXXX)
-joplin --profile "$JOPLIN_PROFILE" --non-interactive export --format md "$TMP/out"
+joplin --profile "$JOPLIN_PROFILE" export --format md "$TMP/out"
 find "$JOPLIN_EXPORT_DIR" -mindepth 1 -delete
 cp -a "$TMP/out/." "$JOPLIN_EXPORT_DIR/"
 rm -rf "$TMP"

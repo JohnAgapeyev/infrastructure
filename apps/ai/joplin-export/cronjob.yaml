@@ -26,6 +26,9 @@ spec:
   jobTemplate:
     spec:
       ttlSecondsAfterFinished: 86400
+      # one retry, not the default 6: the */5 schedule already retries
+      # constantly, and a failed job object lingers a day (KubeJobFailed)
+      backoffLimit: 1
       # hard bound: npm install + sync + export + upsert must fit; a run
       # that overruns is killed (leaving the desktop's .lock alone)
       activeDeadlineSeconds: 300
@@ -57,8 +60,12 @@ spec:
               envFrom:
                 - secretRef: { name: joplin-env }
               resources:
-                requests: { cpu: 100m, memory: 256Mi }
-                limits: { memory: 512Mi }
+                # 2026-10-18: 512Mi limit OOMKilled every run DURING the
+                # npm install (empty logs = died before first output;
+                # joplin pulls ~250MB incl. sharp native deps). 2Gi is
+                # also headroom for the CLI loading the whole note DB.
+                requests: { cpu: 100m, memory: 512Mi }
+                limits: { memory: 2Gi }
               volumeMounts:
                 - { name: state, mountPath: /work/state }
                 - { name: export, mountPath: /work/export }
