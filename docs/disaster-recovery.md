@@ -18,6 +18,14 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
   (their own weekly zips in `<app>/Backups/` are synced and are the
   restore source), `jellyfin/Shokofin/VFS/**` (Shokofin regenerates it
   from Shoko), `nextcloud-data/appdata_*/**` (instance cache + previews).
+- AI phase: `/srv/appdata/hermes` (config/.env/sessions/memories/skills;
+  live `state.db` excluded, snapshot in `_snapshots/hermes/`) and
+  `/srv/appdata/openviking` (ov.conf, ovcli.conf, workspace source files)
+  are protected; `openviking/**/*.db` (queue/audit DBs AND the vector
+  index) is excluded live - snapshots exist in `_snapshots/openviking/`
+  and a stale index rebuilds with `ov reindex` (docs: reindex uses the
+  stored source files). `joplin-export/**` is regenerable (next */5 job
+  run rebuilds it) and NOT protected.
 - Disposable: k3s runtime (`/var/lib/rancher/k3s`, SSD), Prometheus TSDB,
   Jellyfin cache. All recreated from git + appdata.
 - The Matter fabric (`/srv/appdata/matter-server`, Phase 9) is also kept
@@ -96,3 +104,17 @@ Re-run the rehearsal after any change to the backup pipeline.
   scale nextcloud back up; `occ files:scan --all` once Ready. Trashbin and
   file versions ride the data dir restore. If restoring into a RUNNING
   instance, `occ maintenance:mode --on` first.
+- AI phase, openviking: restore `/srv/appdata/openviking` from B2
+  (includes ov.conf with the root + OpenRouter keys; _snapshots/openviking
+  holds consistent copies of its *.db files), `make apply-ai`. A stale or
+  corrupt vector index rebuilds from the stored source files:
+  `ov reindex viking:// --mode semantic_and_vectors` (admin key, or per
+  scope via Studio).
+- AI phase, hermes: restore `/srv/appdata/hermes` from B2 (live state.db
+  excluded - replace with `_snapshots/hermes/state.db` if it is what
+  broke), `make apply-ai`. If `/opt/data/.env` keys were lost, they are
+  recorded in `secrets/*.env`; worst case re-run the first-run steps
+  (operations.md "AI ops") - sessions/memory files ride the dir restore.
+- AI phase, joplin-export: nothing to restore - `/srv/appdata/joplin-cli`
+  (profile) is in B2, `/srv/appdata/joplin-export` regenerates on the
+  next job run.

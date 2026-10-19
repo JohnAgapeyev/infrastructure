@@ -17,6 +17,11 @@ declare -A DBS=(
   [shoko/JMMServer.db3]=/srv/appdata/shoko/Shoko.CLI/SQLite/JMMServer.db3
   [grafana/grafana.db]=/srv/appdata/grafana/grafana.db
   [home-assistant/home-assistant_v2.db]=/srv/appdata/home-assistant/home-assistant_v2.db
+  # AI phase: Hermes sessions/state live in one SQLite db (WAL in-pod on
+  # ext4 hostPath is fine); the joplin CLI keeps its note database in the
+  # profile (only written during the */5 job, but snapshot = consistent).
+  [hermes/state.db]=/srv/appdata/hermes/state.db
+  [joplin-cli/database.sqlite]=/srv/appdata/joplin-cli/profile/database.sqlite
 )
 
 mkdir -p "$DEST"
@@ -31,6 +36,22 @@ for name in "${!DBS[@]}"; do
       echo "snapshot FAILED: $name" >&2
       rc=1
     fi
+  fi
+done
+
+# OpenViking (AI phase): its SQLite files sit at unpredictable paths in
+# the workspace (queuefs/usage-audit/...) - snapshot every *.db found and
+# let the rclone exclude keep the live ones out of the sync (vector index
+# *.db files are excluded with them; a corrupt index rebuilds via
+# `ov reindex` - the source files under the workspace are what matter).
+for db in $(find /srv/appdata/openviking -name '*.db' -type f 2>/dev/null); do
+  rel=${db#/srv/appdata/openviking/}
+  mkdir -p "$DEST/openviking/$(dirname "$rel")"
+  if sqlite3 "$db" ".backup $DEST/openviking/$rel"; then
+    echo "snapshot ok: openviking/$rel"
+  else
+    echo "snapshot FAILED: openviking/$rel" >&2
+    rc=1
   fi
 done
 exit "$rc"

@@ -17,8 +17,9 @@ journalctl -u k3s -e                # k3s itself
 journalctl -u rclone-backup.service -e           # backup job (incl. snapshots)
 ```
 
-Applying changes: `make apply-media` / `apply-home` / `apply-observability`
-/ `apply-all`, or `kubectl apply -k apps/<ns>/<app>` (kubeconfig:
+Applying changes: `make apply-media` / `apply-home` / `apply-cloud` /
+`apply-ai` / `apply-observability` / `apply-all`, or
+`kubectl apply -k apps/<ns>/<app>` (kubeconfig:
 ~/.kube/config; plain `kubectl apply -k` works for apps without
 repo-root secrets; media/observability need the load restrictor - the
 Makefile handles that).
@@ -139,11 +140,14 @@ HA/matter together).
   PostgreSQL into `_snapshots/nextcloud/nextcloud.sql.gz` (both then synced).
 - Exclusions (see the drop-in for the authoritative list): prometheus,
   jellyfin-cache, logs, wal/shm, the LIVE snapshotted DBs (grafana, shoko,
-  jellyfin, seerr, bazarr, home-assistant), the arr live DBs (their weekly
-  zips in `<app>/Backups/` are the restore source - sonarr mid-import-waves
+  jellyfin, seerr, bazarr, home-assistant, hermes state.db, joplin-cli
+  profile db, openviking *.db), the arr live DBs (their weekly zips in
+  `<app>/Backups/` are the restore source - sonarr mid-import-waves
   tore its live DB reads and hard-failed the sync, 2026-10-13),
   `postgres/**` (the pg_dump is the restore source), the Shokofin VFS
-  symlink tree, and nextcloud churn (nextcloud.log, uploads/, appdata_*).
+  symlink tree, nextcloud churn (nextcloud.log, uploads/, appdata_*), and
+  `joplin-export/**` (AI phase: regenerable on the next */5 job run;
+  the openviking vector index is likewise rebuildable via `ov reindex`).
 - Radarr/Sonarr/Prowlarr additionally write weekly config zips to
   `<app>/Backups/`; qBittorrent BT_backup is copied live; the Matter
   fabric is a tiny json blob; `/srv/Media` is NOT backed up (torrents).
@@ -165,7 +169,8 @@ HA/matter together).
 - Custom rules: `apps/observability/rules/prometheusrule.yaml`
   (mdadm failed disks, /srv < 500 GB free, SMART unhealthy,
   MediaServiceDown for 10m; home: MatterServerRestarting,
-  MatterNodesUnavailable, MatterServerUnreachable, HomeAssistantDown).
+  MatterNodesUnavailable, MatterServerUnreachable, HomeAssistantDown;
+  ai: OpenVikingDown).
 - TLS rules: `apps/observability/rules/cert-manager.yaml`
   (CertificateNotReady, CertificateExpiringSoon <14d,
   CertificateScrapeMissing; metrics scraped via
@@ -208,6 +213,8 @@ HA/matter together).
 | Alertmanager | https://alertmanager.home.jg-a.com | |
 | Home Assistant | https://ha.home.jg-a.com | http://nas:8123 |
 | Nextcloud | https://nextcloud.home.jg-a.com | |
+| Hermes (AI) | https://hermes.home.jg-a.com | |
+| OpenViking (AI) | https://openviking.home.jg-a.com (Web Studio at `/studio`) | |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
 apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms). Nextcloud:
@@ -251,6 +258,107 @@ generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
   `secrets/nextcloud-exporter.env`). Grafana dashboard "Nextcloud".
 - **Backups**: pg_dump pre-step + data dir in the nightly B2 sync (see
   Backups section + [disaster-recovery.md](disaster-recovery.md)).
+
+
+## AI ops (Hermes + OpenViking, AI phase)
+
+Design + decisions: `~/.opencode/plan/hermes-openviking-joplin.md`
+(D1-D9). Namespace `ai` (`apps/ai/`): **openviking** (memory/knowledge
+store, OpenRouter embedding + VLM), **hermes** (agent gateway + web
+dashboard), **joplin-export** (CronJob */5: official Joplin CLI sync
+client -> clean markdown export -> `ov add-resource` upsert into
+`viking://resources/joplin`). Nothing reads the Nextcloud Joplin sync
+directory; no NC service account or share exists.
+
+### Go-live order (repo work is done; these are the owner steps)
+
+1. `sudo bash bootstrap/host/phase-ai0.sh` - creates
+   `/srv/appdata/{hermes,openviking,joplin-cli,joplin-export}` with the
+   right owners.
+2. Fill secrets (placeholders committed as `*.example`):
+   `secrets/hermes.env` (dashboard basic auth; secret =
+   `openssl rand -hex 32`), `secrets/joplin.env` (Nextcloud app password
+   "joplin-export-cli" from personal settings -> Security;
+   VERIFY `JOPLIN_SYNC_URL` matches the Joplin desktop sync config).
+   `secrets/openviking.env` + `secrets/ovcli.conf` get their values in
+   steps 4-5.
+3. `sudo cp bootstrap/host/rclone-backup-dropin.conf
+   /etc/systemd/system/rclone-backup.service.d/override.conf` (new
+   excludes: hermes/state.db, joplin-cli profile db, openviking *.db,
+   joplin-export/**) - the drop-in on the host does not update itself.
+4. `make apply-cluster` (ai ns + netpols) and `make apply-ai`.
+5. OpenViking first run (interactive, one-off):
+   `kubectl -n ai exec -it deploy/openviking -- openviking-server init`
+   - answer per `apps/ai/openviking/ov.conf.example` (OpenRouter for both
+   models; set `root_api_key` = `openssl rand -hex 32`). The server
+   starts the moment ov.conf exists. Then
+   `kubectl -n ai exec deploy/openviking -- openviking-server doctor`.
+   Create the account + `john` user (Studio -> Settings, or `ov admin
+   register-user` with the root key) and mint a USER API key; record
+   everything in `secrets/openviking.env`, put the user key + URL in
+   `secrets/ovcli.conf` (`make apply-ai` re-renders the ovcli Secret).
+6. Hermes first run (interactive, one-off):
+   `kubectl -n ai exec -it deploy/hermes -- hermes model` -> OpenRouter
+   (+ key; >=64K-context model); then `hermes plugins install openviking
+   --enable`; then `hermes memory setup openviking` -> **Custom** ->
+   endpoint `http://openviking.ai.svc.cluster.local:1933` + the user key
+   (non-localhost, so the plugin never spawns its own server). In the
+   profile's `config.yaml` add `dashboard.public_url:
+   https://hermes.home.jg-a.com` + `dashboard.trusted_proxies:
+   ["10.42.0.0/16"]`.
+
+### First live-run VERIFY items
+
+- joplin CLI headless (`run.sh` header): config-by-command works, sync
+  pulls, `export --format md` into a fresh dir succeeds.
+- `ov tree viking://resources/joplin` mirrors notebook folders with
+  title-named files; edit a desktop note -> next job runs re-embed it;
+  delete one in Joplin -> it drops out of the resource.
+- OpenRouter actually serves the chosen embedding model + dimension
+  (qwen3-embedding-8b / 4096 in the example) and the VLM model.
+- Brain writes: ask Hermes to save a long note. If the plugin's
+  `viking_add_resource` can write raw docs, use it; otherwise deploy the
+  fallback skill once:
+  `kubectl -n ai cp apps/ai/hermes-skills/brain-save $(kubectl -n ai
+  get pod -l app=hermes -o jsonpath='{.items[0].metadata.name}'):/opt/data/skills/`
+
+### End-to-end checks
+
+- Edit a note on the desktop -> ~5-15 min later Hermes can answer a
+  question only that note answers (ask via https://hermes.home.jg-a.com).
+- "Remember that I keep screws in the garage drawer" -> NEW session ->
+  ask where the screws are -> recalled from memory; visible in Studio.
+- Studio curation: edit a memory file -> `viking_read` returns the edit;
+  delete it -> gone from search; `viking_forget` from chat works.
+- `kubectl -n ai create job --from=cronjob/joplin-export joplin-export-manual`
+  completes green; OpenVikingDown fires on scale-to-0 and resolves.
+
+### Updates
+
+- Dependabot "ai" group (openviking + hermes images) -> merge PR ->
+  `make apply-ai` (Recreate restarts pods). Hermes swaps keep /opt/data
+  (entrypoint runs config migrations); OpenViking keeps ov.conf + the
+  workspace - read release notes before majors (0.5.0 flipped Working
+  Memory default off, etc.), tar `/srv/appdata/openviking` first.
+- npm pins inside `apps/ai/joplin-export/run.sh` (joplin 3.7.1,
+  @openviking/cli 0.4.23) are manual, like K3S_VERSION; bump the joplin
+  CLI in step with the desktop client's Joplin version.
+- Rollback = `git revert` + `make apply-ai`.
+
+### Troubleshooting
+
+- Logs: `kubectl -n ai logs deploy/hermes --tail=200` (gateway output is
+  also rotated under `/srv/appdata/hermes/logs/gateways/`),
+  `kubectl -n ai logs deploy/openviking --tail=200`, or the job logs
+  (the `ov add-resource` task id is in them).
+- OpenViking health surfaces: `/health` (liveness) and `/ready`
+  (readiness - AGFS/vectordb/embedding checks) on
+  https://openviking.home.jg-a.com; `/metrics` powers OpenVikingDown.
+- Sync-lock contention with the desktop client: the job is Forbid +
+  300s deadline; if runs start dying on the .lock, widen the schedule.
+- The hermes pod has NO kubeconfig, NO NC mounts, NO docker socket -
+  if a task seems to need them, that is by design (D6); use the skills
+  and the memory provider instead.
 
 
 ## Known quirks (learned during migration)

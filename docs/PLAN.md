@@ -30,6 +30,31 @@ image's apache LimitRequestBody defaults to 1GiB (APACHE_BODY_LIMIT=0).
 PENDING: SMTP creds (owner) -> mail config + family onboarding; TOTP
 enrollment happens at john's next login.
 
+Progress (2026-10-18, AI phase - Hermes Agent + OpenViking + Joplin
+ingestion): AI-0..AI-5 COMMITTED (git-declared work complete; cluster
+rollout PENDING owner go-live: ### SUDO bootstrap/host/phase-ai0.sh +
+fill secrets/{hermes,joplin,openviking}.env + secrets/ovcli.conf +
+re-copy the rclone drop-in (new excludes) + make apply-cluster/apply-ai +
+interactive first-run - full ordered runbook in operations.md "AI ops").
+Components (ns `ai`, apps/ai/): openviking v0.5.0 (memory/knowledge
+store, OpenRouter embedding+VLM, state /srv/appdata/openviking,
+--without-bot, /health+/ready probes), hermes-agent v0.22.2 (gateway run
+supervised by s6 + dashboard :9119 behind mandatory basic auth, state
+/srv/appdata/hermes, OpenViking memory plugin), joplin-export CronJob
+*/5 (node:24.22.0-bookworm-slim + joplin@3.7.1 + @openviking/cli@0.4.23:
+official Joplin CLI sync client -> clean md export -> ov add-resource
+upsert into viking://resources/joplin). Design/decisions/ref:
+~/.opencode/plan/hermes-openviking-joplin.md (D1-D9: second brain lives
+IN OpenViking curated via Web Studio; the Nextcloud Joplin sync dir is
+NEVER read raw - official CLI only; no NC service account/share; one
+OpenRouter key for everything; dashboard-only access; raw-dir watching,
+NC brain destination and Joplin MCP assessed and rejected - see the plan
+§8). LESSONS baked into manifests: watch_interval<=0 with an explicit
+`to` can pause a watch (the job never passes it); the OV image serves a
+pending /health before ov.conf exists (probes safe from first boot);
+Hermes dashboard auth is mandatory on non-loopback binds; ServiceMonitor
+for openviking lives in-ns (home-assistant precedent).
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

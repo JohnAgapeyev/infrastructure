@@ -34,6 +34,23 @@ All app state lives on `/srv` (RAID).
   sync). `/srv/appdata/postgres` - PGDATA for Nextcloud's PostgreSQL
   (999:999, 0700; consistent dumps live in `_snapshots/nextcloud/`, live
   files are excluded from the rclone sync).
+- `/srv/appdata/hermes` - Hermes Agent state (config.yaml, .env, sessions,
+  memories, skills, state.db): `/opt/data` in the pod, owned by the image
+  runtime user UID 10000 (entrypoint chowns on first boot). Never mount
+  into anything else and never run two gateways against it.
+- `/srv/appdata/openviking` - OpenViking state: `ov.conf` (root key +
+  OpenRouter key - first-run wizard product, never in git),
+  `ovcli.conf`, and the workspace (`data/` - AGFS files + local vector
+  index). Image runs as root; the embedded vector backend holds an
+  exclusive lock on the workspace - one pod, one replica, nothing else
+  opens the dir.
+- `/srv/appdata/joplin-cli` - official Joplin CLI sync-client profile
+  (note database, settings) + persistent npm prefix/cache for the
+  joplin-export CronJob. Owned 1000:1000 (= the node image "node" user;
+  NOTE host uid 1000 is also john - the owner can inspect it directly).
+- `/srv/appdata/joplin-export` - the clean markdown export tree (one dir
+  per notebook, title-named files). Fully regenerable (next job run
+  rebuilds it); excluded from the B2 sync on purpose.
 - `/srv/misc/torrents` is a host symlink -> `/srv/Media/Torrents` (the qbit
   pod additionally mounts the real dir at `/srv/misc/torrents` = compat
   mount A; the Samba `[temp]` share does NOT follow the symlink - expected).
@@ -63,6 +80,8 @@ All app state lives on `/srv` (RAID).
 | ntfy | 0 | 0 | in-image default root (upstream image has no USER); /srv/appdata/ntfy holds cache + user/token db |
 | www-data (nextcloud) | 33 | 33 | in-image UID (official nextcloud image); appdata dirs chowned 33:media |
 | postgres (nextcloud) | 999 | 999 | in-image UID; /srv/appdata/postgres 0700 |
+| hermes | 10000 | 10000 | in-image UID (nousresearch/hermes-agent runtime user; entrypoint chowns /opt/data) |
+| node (joplin-export) | 1000 | 1000 | in-image UID (node:bookworm-slim "node" user); joplin-cli + joplin-export dirs 1000:1000 - collides with host john (1000) by design, owner-inspectable |
 
 Plan's original UIDs 980-982 were taken (systemd users); owner chose auto
 assignment at creation. `/srv/appdata/<app>` dirs are chowned `<user>:media`
