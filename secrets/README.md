@@ -17,3 +17,4 @@ by kustomize `secretGenerator` in the app kustomizations.
 | `certmanager.env` | `CLOUDFLARE_API_TOKEN` | cert-manager dns01 solver (wildcard `*.home.jg-a.com`) |
 | `nextcloud.env` | `NEXTCLOUD_ADMIN_USER`, `NEXTCLOUD_ADMIN_PASSWORD`, `POSTGRES_PASSWORD`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM_ADDRESS`, `MAIL_DOMAIN` | nextcloud install (NC-1, first-run envs), postgres |
 | `nextcloud-exporter.env` | `NEXTCLOUD_AUTH_TOKEN` | nextcloud-exporter (NC-2; serverinfo app token - `occ config:app:set serverinfo token`) |
+| `openclaw.env` | `OPENCLAW_GATEWAY_TOKEN`, `OPENROUTER_API_KEY` | apps/ai/openclaw (OC phase; Control UI token + chat/embeddings key) |
