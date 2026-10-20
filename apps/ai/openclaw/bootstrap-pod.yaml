@@ -1,0 +1,52 @@
+# OpenClaw FIRST-RUN bootstrap pod (OC-1) - a ONE-OFF, run manually, like
+# apps/ai/joplin-export/bootstrap-pod.yaml. NOT part of the kustomization
+# (never applied by `make apply-ai`).
+#
+# Why this exists (2026-10-20 go-live lesson): the gateway FAILS CLOSED on
+# a missing/empty state dir - "Gateway start blocked: existing config is
+# missing gateway.mode" - so the Deployment crash-loops before anyone can
+# kubectl exec into it. Unlike OpenViking (which serves a pending /health
+# while unconfigured), openclaw refuses to serve. First-run setup must
+# therefore happen in a separate pod sharing the same hostPath state:
+# scale deploy/openclaw to 0, apply this, exec in, onboard, delete this
+# pod, scale the Deployment back to 1.
+#
+# Usage (operations.md "AI ops" step 5):
+#   kubectl -n ai scale deploy/openclaw --replicas=0
+#   kubectl apply -f apps/ai/openclaw/bootstrap-pod.yaml
+#   kubectl -n ai exec -it openclaw-bootstrap -- openclaw onboard \
+#     --mode local --no-install-daemon --skip-channels
+#   # ... then the openclaw.json edits (openclaw.json.example), verify:
+#   kubectl -n ai exec openclaw-bootstrap -- cat /home/node/.openclaw/openclaw.json
+#   kubectl -n ai delete pod openclaw-bootstrap
+#   kubectl -n ai scale deploy/openclaw --replicas=1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openclaw-bootstrap
+  namespace: ai
+  labels: { app: openclaw-bootstrap }
+spec:
+  restartPolicy: Never
+  containers:
+    - name: openclaw-bootstrap
+      image: ghcr.io/openclaw/openclaw:2026.10.5
+      # hold the pod alive so the owner can exec in for the interactive
+      # wizard; the gateway itself is NOT started here
+      command: ["sleep", "3600"]
+      env:
+        - name: OPENCLAW_GATEWAY_TOKEN
+          valueFrom: { secretKeyRef: { name: openclaw-env, key: OPENCLAW_GATEWAY_TOKEN } }
+        - name: OPENROUTER_API_KEY
+          valueFrom: { secretKeyRef: { name: openclaw-env, key: OPENROUTER_API_KEY } }
+      volumeMounts:
+        - { name: data, mountPath: /home/node/.openclaw }
+        - { name: joplin-export, mountPath: /mnt/joplin-export, readOnly: true }
+      resources:
+        requests: { cpu: 100m, memory: 512Mi }
+        limits: { memory: 2Gi }
+  volumes:
+    - name: data
+      hostPath: { path: /srv/appdata/openclaw, type: Directory }
+    - name: joplin-export
+      hostPath: { path: /srv/appdata/joplin-export, type: Directory }

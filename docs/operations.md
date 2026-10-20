@@ -292,10 +292,17 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
    scripts/snapshot-sqlite.sh /srv/appdata/_scripts/snapshot-sqlite.sh`
    (new openclaw snapshot loop) - neither host file updates itself.
 4. `make apply-cluster` (netpol updates) and `make apply-ai`.
-5. OpenClaw first run (interactive, one-off). The gateway starts with NO
-   config; onboard writes `/srv/appdata/openclaw/openclaw.json`:
+5. OpenClaw first run (interactive, one-off). The gateway FAILS CLOSED on
+   an empty state dir ("Gateway start blocked: existing config is missing
+   gateway.mode" - 2026-10-20 go-live lesson; unlike OpenViking there is
+   no pending health server), so the Deployment crash-loops until
+   onboard has run. First-run happens in a one-off pod sharing the same
+   hostPath state (`apps/ai/openclaw/bootstrap-pod.yaml`, the
+   joplin-export bootstrap precedent):
    ```
-   kubectl -n ai exec -it deploy/openclaw -- openclaw onboard \
+   kubectl -n ai scale deploy/openclaw --replicas=0
+   kubectl apply -f apps/ai/openclaw/bootstrap-pod.yaml
+   kubectl -n ai exec -it openclaw-bootstrap -- openclaw onboard \
      --mode local --no-install-daemon --skip-channels
    ```
    - provider: OpenAI-compatible -> OpenRouter base URL
@@ -311,9 +318,14 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
      (`memory.search.extraPaths` -> `/mnt/joplin-export` +
      `**/*.md` pattern, embeddings provider -> OpenRouter). VERIFY each
      key against the pinned version's configuration reference.
-   - NO channels (D14); the deployment injects the token as an env var so
-     onboard can consume it without pasting into a terminal if you prefer
-     the fully non-interactive form.
+   - NO channels (D14); the bootstrap pod injects the token as an env var
+     so onboard can consume it without pasting into a terminal.
+   - Verify then hand over to the Deployment:
+   ```
+   kubectl -n ai exec openclaw-bootstrap -- cat /home/node/.openclaw/openclaw.json
+   kubectl -n ai delete pod openclaw-bootstrap
+   kubectl -n ai scale deploy/openclaw --replicas=1
+   ```
 6. Reindex the Joplin tree once the first CronJob run has populated it:
    `kubectl -n ai exec deploy/openclaw -- openclaw memory index --force`
    (then `openclaw memory status`).
@@ -340,6 +352,12 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
   750, owner 1000:1000 (the CronJob's user) and the openclaw image runs as
   `node` (1000) - same UID, works. VERIFY with `ls` if the image user ever
   changes (C7).
+- VERIFIED 2026-10-20 (go-live): the gateway FAILS CLOSED on an empty
+  state dir ("Gateway start blocked: existing config is missing
+  gateway.mode"; no pending health server unlike OpenViking) - first-run
+  onboard happens in a one-off bootstrap pod
+  (`apps/ai/openclaw/bootstrap-pod.yaml`), not via kubectl exec on the
+  Deployment, which crash-loops until configured.
 - Embeddings index identity: changing the embedding provider/model pauses
   search until `openclaw memory index --force` (upstream behavior) - that
   is the runbook answer to "search stopped returning results" after a

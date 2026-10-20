@@ -88,6 +88,12 @@ deletion propagation on the pinned version (C4/C6), OpenRouter
 embedding model via the generic OpenAI-compatible provider (C5),
 onboard non-interactive flags (C2), image runtime UID 1000 vs the
 hostPath (C1 - export tree readable by same-UID design, C7).
+GO-LIVE LESSON (2026-10-20): the gateway FAILS CLOSED on an empty state
+dir (missing gateway.mode) - the Deployment crash-loops before any
+kubectl exec is possible, so first-run onboard runs in a one-off
+bootstrap pod sharing the same hostPath
+(apps/ai/openclaw/bootstrap-pod.yaml, joplin-export bootstrap
+precedent); runbook corrected.
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
