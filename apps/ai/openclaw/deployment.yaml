@@ -47,15 +47,18 @@ spec:
             - { name: http, containerPort: 18789 }
           # Container check endpoints are auth-free by design (upstream
           # docs): /healthz liveness, /startupz startup + traffic admission.
-          # /readyz is deep/channel-aware - deliberately NOT used as the
-          # readiness probe (a failed channel must not remove an otherwise
-          # healthy gateway; there are no channels today anyway).
+          # /readyz is deep/channel-aware - deliberately NOT used (a failed
+          # channel must not remove an otherwise healthy gateway).
+          # GO-LIVE LESSON 2026-10-20: /startupz (+ /readyz) answer 403 to
+          # NON-LOOPBACK clients even with the gateway token - the kubelet
+          # probes the pod IP, so /startupz can never pass. /healthz answers
+          # 200 from the pod IP: BOTH probes use it.
           startupProbe:
             httpGet: { path: /healthz, port: 18789 }
             periodSeconds: 10
             failureThreshold: 30
           readinessProbe:
-            httpGet: { path: /startupz, port: 18789 }
+            httpGet: { path: /healthz, port: 18789 }
             periodSeconds: 10
           livenessProbe:
             httpGet: { path: /healthz, port: 18789 }

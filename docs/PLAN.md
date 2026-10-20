@@ -67,8 +67,9 @@ release automation + SBOM/provenance; custom Dockerfile + community
 mirrors fourplayers/dhso REJECTED by that reasoning, D11; gateway
 :18789 + web Control UI only, token auth, no channels, D14; builtin
 memory MEMORY.md + memory/*.md + per-agent SQLite, OpenRouter
-embeddings, D15; state /srv/appdata/openclaw, probes /healthz +
-/startupz), joplin-export CronJob */5 UNCHANGED LEGS (official Joplin
+embeddings, D15; state /srv/appdata/openclaw, probes /healthz for BOTH liveness and
+readiness - /startupz//readyz are loopback-gated, 403 to the kubelet's
+pod-IP probes, 2026-10-20 go-live lesson), joplin-export CronJob */5 UNCHANGED LEGS (official Joplin
 CLI sync client -> clean md export -> atomic tree swap) with the
 `ov add-resource` upsert leg REMOVED (D13: openclaw indexes
 /srv/appdata/joplin-export via READ-ONLY mount +

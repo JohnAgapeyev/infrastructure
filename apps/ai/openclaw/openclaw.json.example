@@ -1,25 +1,35 @@
 {
-  "_comment": "openclaw.json EXAMPLE - no secrets beyond what upstream stores here. The real file is created on the hostPath by the one-off `openclaw onboard` (operations.md 'AI ops'); this documents the steady-state shape so a restore/revert can recreate it. VERIFY every key against the pinned version's configuration reference (docs.openclaw.ai) - do not trust this shape blindly. The OPENROUTER_API_KEY is NOT here: it arrives as an env var from the openclaw-env Secret and memory search resolves keys from environment variables.",
+  "_comment": "openclaw.json EXAMPLE - documents the steady-state shape actually applied at OC-1 go-live (2026-10-20) via `openclaw config patch --file openclaw.patch.json5` (schema-validated). The REAL file lives on the hostPath (/srv/appdata/openclaw/openclaw.json, first-run onboard product). Model continuity with the disabled Hermes/OpenViking stack (D15/D16): same OpenRouter key (env SecretRef), the owner's OpenViking-era models. Secrets are NOT here: OPENROUTER_API_KEY + OPENCLAW_GATEWAY_TOKEN arrive as env vars from the openclaw-env Secret. meta/wizard/skills/telemetry/onboard blocks omitted.",
   "gateway": {
     "mode": "local",
-    "bind": "lan",
     "port": 18789,
+    "bind": "lan",
+    "trustedProxies": ["10.42.0.0/16"],
     "controlUi": {
       "allowedOrigins": ["https://openclaw.home.jg-a.com"]
     }
   },
   "models": {
-    "_comment": "OpenRouter via its OpenAI-compatible endpoint; >=64K-context model, owner's choice at onboard (D16). provider id/shape VERIFY against the pinned config reference.",
     "providers": {
       "openrouter": {
-        "baseUrl": "https://openrouter.ai/api/v1"
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": { "source": "env", "provider": "default", "id": "OPENROUTER_API_KEY" }
       }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "openrouter/z-ai/glm-5.3-flash" }
     }
   },
   "memory": {
     "search": {
-      "_comment": "D13/D15: the builtin memory engine indexes the read-only Joplin export mount via extraPaths (docs: 'the builtin engine can index directories outside the workspace with memory.search.extraPaths'). embeddings via the generic OpenAI-compatible provider -> OpenRouter (same key as chat). Pattern scopes to markdown only. VERIFY extraPaths/glob key shape + the provider block on the pinned version; fallback = keyword-only search (documented degradation).",
-      "provider": "openai",
+      "provider": "openai-compatible",
+      "model": "qwen/qwen3-embedding-8b",
+      "remote": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": { "source": "env", "provider": "default", "id": "OPENROUTER_API_KEY" }
+      },
       "extraPaths": [
         { "path": "/mnt/joplin-export", "pattern": "**/*.md" }
       ]

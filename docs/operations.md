@@ -423,7 +423,10 @@ files) never changed; the state dirs and B2 backups were never touched:
 
 - Logs: `kubectl -n ai logs deploy/openclaw --tail=200`; job logs for
   joplin-export (the export tree swap is visible in them).
-- Health: `/healthz` (liveness), `/startupz` (readiness/startup admission)
+- Health: `/healthz` (liveness AND readiness - GO-LIVE LESSON 2026-10-20:
+  `/startupz` + `/readyz` answer 403 to non-loopback clients even with the
+  token, so the kubelet's pod-IP probes can never pass; both probes use
+  /healthz)
   in-pod or via the ingress; authenticated deep snapshot:
   `kubectl -n ai exec deploy/openclaw -- node dist/index.js gateway health
   --token "$OPENCLAW_GATEWAY_TOKEN"`.
