@@ -21,8 +21,7 @@
 #   egress, joplin-export only: Nextcloud WebDAV via Traefik, allowed to
 #                      the whole kube-system namespace on web ports - the
 #                      klipper hostPort DNAT rewrites the dst several
-#                      times (svclb pod -> traefik Service cluster IP ->
-#                      traefik pod) before egress policies evaluate, so a
+#                      times before egress policies evaluate, so a
 #                      selector to kube-system 80/443 covers every hop
 #                      (2026-10-18 lessons: an ipBlock on the node IP
 #                      matches none of the post-NAT destinations; the
@@ -31,6 +30,13 @@
 #                      profile DB, not stdout; see operations.md quirks
 #                      for the k3s controller wiring bug + the aged-pod
 #                      testing procedure)
+#                      OC phase 2026-10-20: traefik binds node 80/443 via
+#                      its pod hostPorts now (klipper svclb for traefik
+#                      is gone - it MASQUERADEd XFF away for every
+#                      ingress; see cluster/traefik/helmchartconfig.yaml)
+#                      - the post-DNAT destination is the traefik pod in
+#                      kube-system, still covered by this allow; verified
+#                      green right after the change.
 #   ingress, all pods:
 #     - same-namespace  kept generic
 #     - kube-system    traefik (openclaw Control UI ingress - ALL client

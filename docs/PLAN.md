@@ -95,6 +95,23 @@ kubectl exec is possible, so first-run onboard runs in a one-off
 bootstrap pod sharing the same hostPath
 (apps/ai/openclaw/bootstrap-pod.yaml, joplin-export bootstrap
 precedent); runbook corrected.
+GO-LIVE LESSON 2 (2026-10-20): /startupz + /readyz are LOOPBACK-GATED
+(403 to the kubelet's pod-IP probes) - both probes use /healthz.
+GO-LIVE LESSON 3 (2026-10-20): openclaw Control UI behind Traefik
+answered 403 proxy_attribution_required - openclaw's attribution needs
+a NON-trusted-CIDR, non-loopback hop in the X-Forwarded-For chain, and
+the k3s klipper svclb hostPort pods MASQUERADE all LoadBalancer
+hostPort traffic (XFF was always the node's pod-CIDR address
+10.42.0.1, inside trustedProxies 10.42.0.0/16 = unattributable).
+FIX (cluster/traefik/helmchartconfig.yaml, applies cluster-wide):
+traefik Service type NodePort (klipper only manages LoadBalancer
+Services) + traefik pod hostPorts 80/443 (kubelet hostPort DNAT
+preserves source IPs) - every ingress now sees real client IPs
+(nextcloud/jellyfin/grafana verified 200, joplin-export WebDAV sync
+verified green). Chart pitfalls: service.spec is allow-listed (no
+.annotations), and valuesContent must keep ONE top-level ports: key
+(a duplicate is silently dropped). Default chat model:
+openrouter/z-ai/glm-5.3-flash (owner change from glm-5.3).
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live

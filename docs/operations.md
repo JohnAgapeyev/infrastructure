@@ -358,6 +358,24 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
   onboard happens in a one-off bootstrap pod
   (`apps/ai/openclaw/bootstrap-pod.yaml`), not via kubectl exec on the
   Deployment, which crash-loops until configured.
+- **Cluster change (traefik, 2026-10-20):** the k3s klipper svclb
+   hostPort pods MASQUERADE all LoadBalancer hostPort traffic (DNAT to
+   nodeIP:nodePort + `POSTROUTING -j MASQUERADE` inside the svclb pod
+   netns), so X-Forwarded-For could never carry a real client IP and
+   openclaw's Control UI answered `403 proxy_attribution_required`
+   (its attribution needs a non-loopback, NON-TRUSTED-CIDR hop in the
+   XFF chain - `trustedProxies: [10.42.0.0/16]` + XFF `10.42.0.1` =
+   whole chain trusted = unattributable). Fix in
+   `cluster/traefik/helmchartconfig.yaml`: Service type NodePort
+   (klipper stands down - it only manages LoadBalancer Services) +
+   `ports.web/websecure.hostPort` 80/443 (kubelet hostPort DNAT
+   preserves source IPs; DNS `*.home.jg-a.com` -> nodeIP -> traefik pod
+   unchanged). Verified: XFF carries real LAN IPs; all other hostnames
+   work; qbit/jellyfin svclb pods unaffected. Chart-value pitfalls
+   learned: `service.spec` is allow-listed (`.annotations` does not
+   exist there), and the valuesContent must keep ONE top-level `ports:`
+   key - a duplicate top-level key is silently dropped by the YAML
+   parser.
 - Embeddings index identity: changing the embedding provider/model pauses
   search until `openclaw memory index --force` (upstream behavior) - that
   is the runbook answer to "search stopped returning results" after a

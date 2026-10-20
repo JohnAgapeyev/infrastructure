@@ -19,6 +19,31 @@ spec:
     # silently clobber each other on apply). Traefik metrics values used to
     # live in apps/observability/exporters/jellyfin-traefik.yaml; they are
     # consolidated here.
+    #
+    # externalTrafficPolicy: Local (OC-phase go-live lesson, 2026-10-20):
+    # the DEFAULT (Cluster) SNATs Service-routed traffic to the node's
+    # pod-CIDR address. Kept Local for any Service-routed path; the main
+    # fix is the hostPorts below.
+    #
+    # The REAL fix (2026-10-20): klipper svclb hostPort pods MASQUERADE all
+    # LoadBalancer hostPort traffic (DNAT to nodeIP:nodePort + POSTROUTING
+    # MASQUERADE inside the svclb pod netns), so X-Forwarded-For could
+    # NEVER carry a real client IP - openclaw's attribution needs a
+    # NON-trusted, non-loopback hop in the XFF chain and rejects the
+    # masqueraded 10.42.0.1 with `proxy_attribution_required`. Moving the
+    # Service to type: NodePort makes klipper stand down entirely (it only
+    # manages LoadBalancer Services), and the traefik pod binds the
+    # hostPorts directly: DNS *.home.jg-a.com -> nodeIP 80/443 -> kubelet
+    # hostPort DNAT -> traefik pod, SOURCE IP PRESERVED. The other svclb
+    # pods (qbit/jellyfin LBs) are separate services, unaffected.
+    # Chart value paths VERIFIED against traefik-40.1.5+up40.1.0.tgz:
+    # service.spec.type (NOT a generic passthrough - service.spec is
+    # allow-listed; service.spec.annotations does NOT exist - use
+    # service.annotations), ports.web/websecure.hostPort.
+    service:
+      spec:
+        externalTrafficPolicy: Local
+        type: NodePort
     tlsStore:
       default:
         defaultCertificate:
@@ -34,17 +59,14 @@ spec:
             - action: drop
               regex: traefik_entrtpoint_request_duration_seconds_bucket
               sourceLabels: [__name__]
+    # ONE ports: key for the whole valuesContent (2026-10-20 lesson: a
+    # second top-level `ports:` key is silently LAST-KEY-WINS-dropped by
+    # the YAML parser - the hostPorts below must live HERE).
     ports:
-      websecure:
-        # Traefik v3 readTimeout (default 60s) covers reading the ENTIRE
-        # request incl. body - big WebDAV uploads to Nextcloud die with 502
-        # at exactly 60s even on LAN. 1h bounds it generously for VPN-speed
-        # uploads; acceptable because this entrypoint is LAN/VPN-only (no
-        # public exposure, no slowloris surface).
-        transport:
-          respondingTimeouts:
-            readTimeout: 3600s
       web:
+        # kubelet hostPort: DNS -> nodeIP:80 -> traefik pod directly,
+        # source IP preserved (see header).
+        hostPort: 80
         # HTTP -> HTTPS on every host (no plaintext vhosts remain; legacy
         # host ports 8096/8080 are unchanged, they bypass Traefik).
         # NOTE: the chart path is ports.web.HTTP.redirections (redirections
@@ -55,3 +77,13 @@ spec:
               to: websecure
               scheme: https
               permanent: true
+      websecure:
+        hostPort: 443
+        # Traefik v3 readTimeout (default 60s) covers reading the ENTIRE
+        # request incl. body - big WebDAV uploads to Nextcloud die with 502
+        # at exactly 60s even on LAN. 1h bounds it generously for VPN-speed
+        # uploads; acceptable because this entrypoint is LAN/VPN-only (no
+        # public exposure, no slowloris surface).
+        transport:
+          respondingTimeouts:
+            readTimeout: 3600s
