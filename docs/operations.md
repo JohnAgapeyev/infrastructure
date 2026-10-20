@@ -449,6 +449,19 @@ files) never changed; the state dirs and B2 backups were never touched:
   receipts in the logs) and the browser device pairing + token survive
   (state is on the hostPath). If it OOMs again, `openclaw gateway
   diagnostics export` inside the pod reports the worker breakdown.
+- Model "Test Connection" failing while chat works (2026-10-20 go-live
+  lesson): the UI probe runs an embedded agent session with a tiny
+  generation budget; with `thinking=medium` (the onboard default) the
+  reasoning model burns the whole probe budget on reasoning tokens ->
+  EMPTY content -> the probe reports "The connection check failed" even
+  though the API call returned HTTP 200 (visible in logs as
+  `[model-fetch] response ... status=200 contentType=text/event-stream`
+  right next to the failed probes). Fix: `openclaw config set
+  agents.defaults.thinkingDefault off`. Thinking can still be enabled
+  per-session in the Control UI. If it recurs after re-enabling
+  thinking, the probe failure is cosmetic - trust a real chat turn.
+  (The CLI probe `openclaw models status --probe` refuses to run while
+  the gateway owns the state dir - by design; verify from the UI.)
 - Health: `/healthz` (liveness AND readiness - GO-LIVE LESSON 2026-10-20:
   `/startupz` + `/readyz` answer 403 to non-loopback clients even with the
   token, so the kubelet's pod-IP probes can never pass; both probes use
