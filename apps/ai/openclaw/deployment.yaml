@@ -1,0 +1,77 @@
+# OpenClaw gateway + web Control UI (OC-1, replacing Hermes as the ai-ns
+# agent; Hermes/OpenViking are DISABLED, not removed - see docs/PLAN.md OC
+# phase). Official first-party image (GHCR is the project's primary registry:
+# release automation, versioned tags, SBOM/provenance attestations; docs say
+# avoid unofficial mirrors - fourplayers/dhso are out).
+# The image's default command runs `openclaw doctor --fix` under exclusive
+# maintenance ownership and then starts the gateway - the command is left
+# UNSET on purpose: a custom entrypoint would skip the doctor activation
+# step (see docs/operations.md "AI ops" for the exit-78 semantics).
+# D14: web Control UI only - NO messaging channels; onboard runs with
+# --skip-channels.
+# All state (openclaw.json, agents/, workspace MEMORY.md + memory/*.md,
+# per-agent SQLite) is /home/node/.openclaw -> /srv/appdata/openclaw.
+# The Joplin export tree is mounted READ-ONLY (D13: the agent may search it
+# via memory_search but never write it - curation happens in Joplin itself).
+# One gateway owns the state dir -> replicas: 1 + Recreate.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw
+  namespace: ai
+  labels: { app: openclaw }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: openclaw }
+  template:
+    metadata:
+      labels: { app: openclaw }
+    spec:
+      containers:
+        - name: openclaw
+          image: ghcr.io/openclaw/openclaw:2026.10.5
+          env:
+            # Control UI / Gateway auth (also read by the one-off onboard
+            # via --gateway-token-ref-env). onboard stores it into
+            # openclaw.json on first run.
+            - name: OPENCLAW_GATEWAY_TOKEN
+              valueFrom: { secretKeyRef: { name: openclaw-env, key: OPENCLAW_GATEWAY_TOKEN } }
+            # Chat model + memory-search embeddings both go through
+            # OpenRouter (D15/D16): the memory plugin resolves keys from
+            # environment variables when not set in openclaw.json.
+            - name: OPENROUTER_API_KEY
+              valueFrom: { secretKeyRef: { name: openclaw-env, key: OPENROUTER_API_KEY } }
+          ports:
+            - { name: http, containerPort: 18789 }
+          # Container check endpoints are auth-free by design (upstream
+          # docs): /healthz liveness, /startupz startup + traffic admission.
+          # /readyz is deep/channel-aware - deliberately NOT used as the
+          # readiness probe (a failed channel must not remove an otherwise
+          # healthy gateway; there are no channels today anyway).
+          startupProbe:
+            httpGet: { path: /healthz, port: 18789 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /startupz, port: 18789 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 18789 }
+            periodSeconds: 30
+          resources:
+            # Node gateway + the memory index; the initial extraPaths index
+            # of the whole Joplin export spikes above steady state.
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - { name: data, mountPath: /home/node/.openclaw }
+            # D13: search-indexed by memory.search.extraPaths, read-only -
+            # the agent can never modify the owner's notes
+            - { name: joplin-export, mountPath: /mnt/joplin-export, readOnly: true }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/openclaw, type: Directory }
+        - name: joplin-export
+          hostPath: { path: /srv/appdata/joplin-export, type: Directory }

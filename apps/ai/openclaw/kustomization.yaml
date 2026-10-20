@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  # Control UI token + the shared OpenRouter key (chat + embeddings).
+  # openclaw.json (model choice, memory config) is first-run product on the
+  # hostPath - see openclaw.json.example.
+  - name: openclaw-env
+    namespace: ai
+    env: ../../../secrets/openclaw.env
+    type: Opaque

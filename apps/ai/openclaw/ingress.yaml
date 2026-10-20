@@ -1,0 +1,24 @@
+# Control UI ingress (D14: web UI only, no messaging channels). Auth = the
+# gateway token (OPENCLAW_GATEWAY_TOKEN) on top of the LAN TLS wildcard -
+# same posture as the other web UIs. gateway.bind: lan +
+# controlUi.allowedOrigins are set in openclaw.json during first run - see
+# operations.md "AI ops".
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openclaw
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - openclaw.home.jg-a.com
+  rules:
+    - host: openclaw.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: openclaw
+                port: { number: 18789 }
