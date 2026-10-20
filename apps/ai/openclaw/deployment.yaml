@@ -64,10 +64,15 @@ spec:
             httpGet: { path: /healthz, port: 18789 }
             periodSeconds: 30
           resources:
-            # Node gateway + the memory index; the initial extraPaths index
-            # of the whole Joplin export spikes above steady state.
+            # Node gateway + the memory index. GO-LIVE LESSON 2026-10-20:
+            # the Control UI's model/test-connection probe OOMKilled the
+            # pod at 2Gi - steady-state RSS ~1.6GiB with ~20 workers
+            # (prepared-model-catalog + session-transcript + sqlite
+            # workers hold ~1GiB heap by themselves; each models.list
+            # pushes ~165KB). 4Gi gives the worker pool room; the host
+            # has ~19GiB spare (2026-10-20).
             requests: { cpu: 500m, memory: 1Gi }
-            limits: { memory: 2Gi }
+            limits: { memory: 4Gi }
           volumeMounts:
             - { name: data, mountPath: /home/node/.openclaw }
             # D13: search-indexed by memory.search.extraPaths, read-only -

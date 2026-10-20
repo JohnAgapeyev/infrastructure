@@ -441,6 +441,14 @@ files) never changed; the state dirs and B2 backups were never touched:
 
 - Logs: `kubectl -n ai logs deploy/openclaw --tail=200`; job logs for
   joplin-export (the export tree swap is visible in them).
+- OOM (2026-10-20 go-live lesson): the Control UI's model/test-connection
+  probe OOMKilled the pod at the original 2Gi limit (steady-state RSS
+  ~1.6GiB with ~20 workers: prepared-model-catalog + session-transcript +
+  sqlite workers hold ~1GiB heap alone). Limit is 4Gi now
+  (deployment.yaml); the pod Recreate-restarts cleanly (SQLite clean-close
+  receipts in the logs) and the browser device pairing + token survive
+  (state is on the hostPath). If it OOMs again, `openclaw gateway
+  diagnostics export` inside the pod reports the worker breakdown.
 - Health: `/healthz` (liveness AND readiness - GO-LIVE LESSON 2026-10-20:
   `/startupz` + `/readyz` answer 403 to non-loopback clients even with the
   token, so the kubelet's pod-IP probes can never pass; both probes use
