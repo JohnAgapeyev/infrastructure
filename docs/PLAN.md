@@ -55,6 +55,40 @@ pending /health before ov.conf exists (probes safe from first boot);
 Hermes dashboard auth is mandatory on non-loopback binds; ServiceMonitor
 for openviking lives in-ns (home-assistant precedent).
 
+Progress (2026-10-20, OC phase - OpenClaw + Joplin port; Hermes/OpenViking
+DISABLED): OC-0..OC-5 COMMITTED (cluster rollout PENDING owner go-live:
+### SUDO bootstrap/host/phase-oc0.sh + fill secrets/openclaw.env + re-copy
+the rclone drop-in AND scripts/snapshot-sqlite.sh to
+/srv/appdata/_scripts/ + make apply-cluster/apply-ai + interactive
+openclaw onboard - full ordered runbook in operations.md "AI ops").
+Components (ns `ai`, apps/ai/): openclaw 2026.10.5 (OFFICIAL first-party
+image ghcr.io/openclaw/openclaw - GHCR is the primary registry with
+release automation + SBOM/provenance; custom Dockerfile + community
+mirrors fourplayers/dhso REJECTED by that reasoning, D11; gateway
+:18789 + web Control UI only, token auth, no channels, D14; builtin
+memory MEMORY.md + memory/*.md + per-agent SQLite, OpenRouter
+embeddings, D15; state /srv/appdata/openclaw, probes /healthz +
+/startupz), joplin-export CronJob */5 UNCHANGED LEGS (official Joplin
+CLI sync client -> clean md export -> atomic tree swap) with the
+`ov add-resource` upsert leg REMOVED (D13: openclaw indexes
+/srv/appdata/joplin-export via READ-ONLY mount +
+memory.search.extraPaths - no OpenViking, no @openviking/cli, no MCP;
+ClawHub joplin skills assessed and rejected: one needs Joplin Server,
+one a running desktop Data API). hermes + openviking: replicas 0,
+ingresses/servicemonitor out of their kustomizations, OpenVikingDown
+rule group commented out - manifests, state dirs (/srv/appdata/
+{hermes,openviking}) and B2 backups ALL KEPT for revert (D10; revert
+runbook in operations.md "AI ops" + the plan). Design/decisions/ref:
+~/.opencode/plan/openclaw-joplin.md (D10-D17, risks C1-C10; supersedes
+the AI-phase plan). Backups: openclaw live *.sqlite excluded +
+snapshotted (_snapshots/openclaw/), doctor .bak copies must ride
+pre-upgrade backups; exit-78 semantics documented in operations.md.
+VERIFY-on-first-boot items: memory.search.extraPaths key shape + glob +
+deletion propagation on the pinned version (C4/C6), OpenRouter
+embedding model via the generic OpenAI-compatible provider (C5),
+onboard non-interactive flags (C2), image runtime UID 1000 vs the
+hostPath (C1 - export tree readable by same-UID design, C7).
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

@@ -18,14 +18,22 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
   (their own weekly zips in `<app>/Backups/` are synced and are the
   restore source), `jellyfin/Shokofin/VFS/**` (Shokofin regenerates it
   from Shoko), `nextcloud-data/appdata_*/**` (instance cache + previews).
-- AI phase: `/srv/appdata/hermes` (config/.env/sessions/memories/skills;
+- AI phase (OC phase additions below): `/srv/appdata/hermes`
+  (config/.env/sessions/memories/skills;
   live `state.db` excluded, snapshot in `_snapshots/hermes/`) and
   `/srv/appdata/openviking` (ov.conf, ovcli.conf, workspace source files)
-  are protected; `openviking/**/*.db` (queue/audit DBs AND the vector
+  are protected - BOTH DISABLED in the OC phase but kept syncing as the
+  revert data; `openviking/**/*.db` (queue/audit DBs AND the vector
   index) is excluded live - snapshots exist in `_snapshots/openviking/`
   and a stale index rebuilds with `ov reindex` (docs: reindex uses the
   stored source files). `joplin-export/**` is regenerable (next */5 job
   run rebuilds it) and NOT protected.
+- OC phase: `/srv/appdata/openclaw` is protected - `openclaw.json` (keys!)
+  + the markdown memory source of truth sync plainly; live
+  `openclaw/**/*.sqlite` (per-agent DBs + memory index) is excluded and
+  snapshotted into `_snapshots/openclaw/`; a corrupt/stale memory index
+  rebuilds with `openclaw memory index --force`. Doctor's pre-migration
+  `.bak` copies (kept in the state dir) must ride the pre-upgrade backup.
 - Disposable: k3s runtime (`/var/lib/rancher/k3s`, SSD), Prometheus TSDB,
   Jellyfin cache. All recreated from git + appdata.
 - The Matter fabric (`/srv/appdata/matter-server`, Phase 9) is also kept
@@ -118,3 +126,13 @@ Re-run the rehearsal after any change to the backup pipeline.
 - AI phase, joplin-export: nothing to restore - `/srv/appdata/joplin-cli`
   (profile) is in B2, `/srv/appdata/joplin-export` regenerates on the
   next job run.
+- OC phase, openclaw: restore `/srv/appdata/openclaw` from B2 (includes
+  openclaw.json with the model/memory config; the gateway token +
+  OpenRouter key are recorded in `secrets/openclaw.env`), replace live
+  `*.sqlite` with the newest `_snapshots/openclaw/` copies if they broke,
+  `make apply-ai`, then `openclaw memory index --force` (stale index).
+  If openclaw.json was lost: re-run the onboard steps (operations.md
+  "AI ops") + re-copy the memory block from
+  `apps/ai/openclaw/openclaw.json.example`.
+- OC phase, hermes/openviking (disabled): their restore entries above are
+  the revert path - see operations.md "AI ops" revert procedure.

@@ -54,4 +54,21 @@ for db in $(find /srv/appdata/openviking -name '*.db' -type f 2>/dev/null); do
     rc=1
   fi
 done
+
+# OpenClaw (OC phase): per-agent SQLite DBs at unpredictable paths
+# (~/.openclaw/agents/<id>/agent/openclaw-agent.sqlite + the memory index)
+# - snapshot every *.sqlite found; the rclone exclude keeps the live ones
+# out of the sync. A corrupt/stale memory index rebuilds with
+# `openclaw memory index --force` - the markdown source of truth
+# (MEMORY.md, memory/*.md) rides the plain dir sync.
+for db in $(find /srv/appdata/openclaw -name '*.sqlite' -type f 2>/dev/null); do
+  rel=${db#/srv/appdata/openclaw/}
+  mkdir -p "$DEST/openclaw/$(dirname "$rel")"
+  if sqlite3 "$db" ".backup $DEST/openclaw/$rel"; then
+    echo "snapshot ok: openclaw/$rel"
+  else
+    echo "snapshot FAILED: openclaw/$rel" >&2
+    rc=1
+  fi
+done
 exit "$rc"

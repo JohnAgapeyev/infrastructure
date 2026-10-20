@@ -141,13 +141,16 @@ HA/matter together).
 - Exclusions (see the drop-in for the authoritative list): prometheus,
   jellyfin-cache, logs, wal/shm, the LIVE snapshotted DBs (grafana, shoko,
   jellyfin, seerr, bazarr, home-assistant, hermes state.db, joplin-cli
-  profile db, openviking *.db), the arr live DBs (their weekly zips in
-  `<app>/Backups/` are the restore source - sonarr mid-import-waves
-  tore its live DB reads and hard-failed the sync, 2026-10-13),
+  profile db, openviking *.db, openclaw *.sqlite), the arr live DBs (their
+  weekly zips in `<app>/Backups/` are the restore source - sonarr
+  mid-import-waves tore its live DB reads and hard-failed the sync,
+  2026-10-13),
   `postgres/**` (the pg_dump is the restore source), the Shokofin VFS
   symlink tree, nextcloud churn (nextcloud.log, uploads/, appdata_*), and
   `joplin-export/**` (AI phase: regenerable on the next */5 job run;
-  the openviking vector index is likewise rebuildable via `ov reindex`).
+  the openviking vector index is likewise rebuildable via `ov reindex`;
+  a stale openclaw memory index rebuilds via `openclaw memory index
+  --force`).
 - Radarr/Sonarr/Prowlarr additionally write weekly config zips to
   `<app>/Backups/`; qBittorrent BT_backup is copied live; the Matter
   fabric is a tiny json blob; `/srv/Media` is NOT backed up (torrents).
@@ -170,7 +173,9 @@ HA/matter together).
   (mdadm failed disks, /srv < 500 GB free, SMART unhealthy,
   MediaServiceDown for 10m; home: MatterServerRestarting,
   MatterNodesUnavailable, MatterServerUnreachable, HomeAssistantDown;
-  ai: OpenVikingDown).
+  ai: OpenVikingDown - SUSPENDED in the OC phase, whole rule group
+  commented out while openviking is disabled; revert per operations.md
+  "AI ops").
 - TLS rules: `apps/observability/rules/cert-manager.yaml`
   (CertificateNotReady, CertificateExpiringSoon <14d,
   CertificateScrapeMissing; metrics scraped via
@@ -213,8 +218,9 @@ HA/matter together).
 | Alertmanager | https://alertmanager.home.jg-a.com | |
 | Home Assistant | https://ha.home.jg-a.com | http://nas:8123 |
 | Nextcloud | https://nextcloud.home.jg-a.com | |
-| Hermes (AI) | https://hermes.home.jg-a.com | |
-| OpenViking (AI) | https://openviking.home.jg-a.com (Web Studio at `/studio`) | |
+| Hermes (AI, OC phase: disabled) | ~~https://hermes.home.jg-a.com~~ | |
+| OpenViking (AI, OC phase: disabled) | ~~https://openviking.home.jg-a.com~~ (Web Studio at `/studio`) | |
+| OpenClaw (AI) | https://openclaw.home.jg-a.com (Control UI; gateway-token auth) | |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
 apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms). Nextcloud:
@@ -260,134 +266,161 @@ generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
   Backups section + [disaster-recovery.md](disaster-recovery.md)).
 
 
-## AI ops (Hermes + OpenViking, AI phase)
+## AI ops (OpenClaw + joplin-export; OC phase - Hermes/OpenViking disabled)
 
-Design + decisions: `~/.opencode/plan/hermes-openviking-joplin.md`
-(D1-D9). Namespace `ai` (`apps/ai/`): **openviking** (memory/knowledge
-store, OpenRouter embedding + VLM), **hermes** (agent gateway + web
-dashboard), **joplin-export** (CronJob */5: official Joplin CLI sync
-client -> clean markdown export -> `ov add-resource` upsert into
-`viking://resources/joplin`). Nothing reads the Nextcloud Joplin sync
-directory; no NC service account or share exists.
+Design + decisions: `~/.opencode/plan/openclaw-joplin.md` (D10-D17;
+supersedes the AI-phase plan `~/.opencode/plan/hermes-openviking-joplin.md`,
+kept for the revert rationale). Namespace `ai` (`apps/ai/`): **openclaw**
+(agent gateway + web Control UI + builtin memory: `MEMORY.md` +
+`memory/*.md` indexed into a per-agent SQLite with OpenRouter embeddings),
+**joplin-export** (CronJob */5: official Joplin CLI sync client -> clean
+markdown export tree; openclaw indexes the tree READ-ONLY via
+`memory.search.extraPaths` - D13), **hermes + openviking DISABLED**
+(`replicas: 0`, manifests/state/backups kept for revert). Nothing reads the
+Nextcloud Joplin sync directory; no NC service account or share exists.
 
 ### Go-live order (repo work is done; these are the owner steps)
 
-1. `sudo bash bootstrap/host/phase-ai0.sh` - creates
-   `/srv/appdata/{hermes,openviking,joplin-cli,joplin-export}` with the
-   right owners.
+1. `sudo bash bootstrap/host/phase-oc0.sh` - creates `/srv/appdata/openclaw`
+   (owned 1000:1000 = the image's `node` user).
 2. Fill secrets (placeholders committed as `*.example`):
-   `secrets/hermes.env` (dashboard basic auth; secret =
-   `openssl rand -hex 32`), `secrets/joplin.env` (Nextcloud app password
-   "joplin-export-cli" from personal settings -> Security;
-   VERIFY `JOPLIN_SYNC_URL` matches the Joplin desktop sync config).
-   `secrets/openviking.env` + `secrets/ovcli.conf` get their values in
-   steps 4-5.
+   `secrets/openclaw.env` - `OPENCLAW_GATEWAY_TOKEN` (`openssl rand -hex 32`)
+   + `OPENROUTER_API_KEY` (the same key Hermes/OpenViking used).
 3. `sudo cp bootstrap/host/rclone-backup-dropin.conf
    /etc/systemd/system/rclone-backup.service.d/override.conf` (new
-   excludes: hermes/state.db, joplin-cli profile db, openviking *.db,
-   joplin-export/**) - the drop-in on the host does not update itself.
-4. `make apply-cluster` (ai ns + netpols) and `make apply-ai`.
-5. OpenViking first run (interactive, one-off). **Never start the server
-   manually** - the image entrypoint watches for ov.conf and starts it BY
-   ITSELF the moment the file exists (a manual `openviking-server` inside
-   the pod just collides with the running one: port 1933 + the exclusive
-   workspace lock - 2026-10-18 lesson).
-   a. `kubectl -n ai exec -it deploy/openviking -- openviking-server init`
-      - answer per `apps/ai/openviking/ov.conf.example` (OpenRouter for
-      both models; set `root_api_key` = `openssl rand -hex 32`). The
-      startup probe allows a 30-minute wizard window.
-   b. Verify: `curl https://openviking.home.jg-a.com/health` ->
-      `"healthy":true` and `/ready` -> all checks `"ok"`.
-   c. Create the account + yourself as its admin user - ONE call with the
-      ROOT key; the response contains the USER key (it is shown only
-      this once). Keep both out of chat/logs:
-      ```
-      curl -X POST https://openviking.home.jg-a.com/api/v1/admin/accounts \
-        -H "X-API-Key: <ROOT_KEY>" -H "Content-Type: application/json" \
-        -d '{"account_id": "home", "admin_user_id": "john"}'
-      ```
-      (Studio instead: open `/studio`, save the root key in Settings,
-      create the account/user under Users - same result, key displayed
-      there.) A root key cannot read/write data - the user key is what
-      Hermes, the ov CLI and Studio day-to-day use.
-   d. Record: root key + user key -> `secrets/openviking.env`; user key
-      -> `secrets/ovcli.conf` (`api_key` field); then `make apply-ai` -
-      it re-renders the ovcli-conf Secret AND un-suspends the joplin-export
-      CronJob (suspend during setup is a live patch only, see step 7).
-6. Hermes first run (interactive, one-off):
-   `kubectl -n ai exec -it deploy/hermes -- hermes model` -> OpenRouter
-   (+ key; >=64K-context model); then `hermes plugins install openviking
-   --enable`; then `hermes memory setup openviking` -> **Custom** ->
-   endpoint `http://openviking.ai.svc.cluster.local:1933` + the user key
-   (non-localhost, so the plugin never spawns its own server). In the
-   profile's `config.yaml` add `dashboard.public_url:
-   https://hermes.home.jg-a.com` + `dashboard.trusted_proxies:
-   ["10.42.0.0/16"]`.
-7. While `secrets/ovcli.conf` still holds a placeholder, the
-   joplin-export CronJob is suspended so it does not fail on the ov
-   upsert every 5 minutes:
-   `kubectl -n ai patch cronjob joplin-export -p '{"spec":{"suspend":true}}'`
-   (`make apply-ai` un-suspends it - suspend is not in git).
+   excludes: openclaw live sqlite) **and** `sudo cp
+   scripts/snapshot-sqlite.sh /srv/appdata/_scripts/snapshot-sqlite.sh`
+   (new openclaw snapshot loop) - neither host file updates itself.
+4. `make apply-cluster` (netpol updates) and `make apply-ai`.
+5. OpenClaw first run (interactive, one-off). The gateway starts with NO
+   config; onboard writes `/srv/appdata/openclaw/openclaw.json`:
+   ```
+   kubectl -n ai exec -it deploy/openclaw -- openclaw onboard \
+     --mode local --no-install-daemon --skip-channels
+   ```
+   - provider: OpenAI-compatible -> OpenRouter base URL
+     (`https://openrouter.ai/api/v1`) + `OPENROUTER_API_KEY` (injected env);
+     model = owner's choice, >=64K context (D16).
+   - gateway auth: token - answer the prompt or let it read
+     `OPENCLAW_GATEWAY_TOKEN` from the environment (`--gateway-auth token
+     --gateway-token-ref-env OPENCLAW_GATEWAY_TOKEN`). VERIFY the exact
+     non-interactive flags on the pinned version.
+   - In `openclaw.json` after onboard (see openclaw.json.example):
+     `gateway.bind: lan`, `gateway.controlUi.allowedOrigins:
+     ["https://openclaw.home.jg-a.com"]`, and the memory block
+     (`memory.search.extraPaths` -> `/mnt/joplin-export` +
+     `**/*.md` pattern, embeddings provider -> OpenRouter). VERIFY each
+     key against the pinned version's configuration reference.
+   - NO channels (D14); the deployment injects the token as an env var so
+     onboard can consume it without pasting into a terminal if you prefer
+     the fully non-interactive form.
+6. Reindex the Joplin tree once the first CronJob run has populated it:
+   `kubectl -n ai exec deploy/openclaw -- openclaw memory index --force`
+   (then `openclaw memory status`).
 
 ### First live-run VERIFY items
 
-- VERIFIED 2026-10-18: joplin 3.7.1 has NO `--non-interactive` flag
-  (one-shot commands are non-interactive anyway), and its sync-target
-  enum is 0 None / 2 FS / 3 OneDrive / 5 Nextcloud / **6 WebDAV** /
-  7 Dropbox / 8 S3 - run.sh uses 6 (WebDAV) + the full dav URL.
-- The FIRST `joplin sync` downloads the whole vault and can exceed the
-  job's 300s deadline (steady-state syncs are seconds). Bootstrap it
-  once with `apps/ai/joplin-export/bootstrap-pod.yaml` (a one-off pod
-  running just config+sync against the shared profile), then let the
-  CronJob take over.
-- `ov tree viking://resources/joplin` mirrors notebook folders with
-  title-named files; edit a desktop note -> next job runs re-embed it;
-  delete one in Joplin -> it drops out of the resource.
-- OpenRouter actually serves the chosen embedding model + dimension
-  (qwen3-embedding-8b / 4096 in the example) and the VLM model.
-- Brain writes: ask Hermes to save a long note. If the plugin's
-  `viking_add_resource` can write raw docs, use it; otherwise deploy the
-  fallback skill once:
-  `kubectl -n ai cp apps/ai/hermes-skills/brain-save $(kubectl -n ai
-  get pod -l app=hermes -o jsonpath='{.items[0].metadata.name}'):/opt/data/skills/`
+- VERIFIED 2026-10-18 (joplin CLI, unchanged): one-shot commands are
+  non-interactive by default (NO `--non-interactive` flag exists); sync
+  target 6 = WebDAV; the FIRST `joplin sync` downloads the whole vault and
+  can exceed the 300s job deadline (bootstrap once with
+  `apps/ai/joplin-export/bootstrap-pod.yaml`).
+- `openclaw onboard --non-interactive ...` flag surface on the pinned
+  version (C2) - interactive `kubectl exec` onboard is the fallback and is
+  what step 5 above assumes.
+- `memory.search.extraPaths` key shape + glob semantics on the pinned
+  version (C4); deletion propagation from extraPaths (C6) - a note deleted
+  in Joplin must drop out of the index after a cycle. Fallbacks:
+  pattern-scope the index, accept staleness, or schedule
+  `openclaw memory index --force`.
+- OpenRouter actually serves the chosen embedding model through the
+  generic OpenAI-compatible provider block (C5). Fallback: keyword-only
+  memory search (documented degradation, D15).
+- The export tree must be READABLE by the openclaw runtime UID: it is
+  750, owner 1000:1000 (the CronJob's user) and the openclaw image runs as
+  `node` (1000) - same UID, works. VERIFY with `ls` if the image user ever
+  changes (C7).
+- Embeddings index identity: changing the embedding provider/model pauses
+  search until `openclaw memory index --force` (upstream behavior) - that
+  is the runbook answer to "search stopped returning results" after a
+  config change.
 
 ### End-to-end checks
 
-- Edit a note on the desktop -> ~5-15 min later Hermes can answer a
-  question only that note answers (ask via https://hermes.home.jg-a.com).
-- "Remember that I keep screws in the garage drawer" -> NEW session ->
-  ask where the screws are -> recalled from memory; visible in Studio.
-- Studio curation: edit a memory file -> `viking_read` returns the edit;
-  delete it -> gone from search; `viking_forget` from chat works.
+- `curl https://openclaw.home.jg-a.com/healthz` (or in-pod) -> ok; Control
+  UI loads over the ingress and authenticates with the gateway token.
+- A chat turn answers via OpenRouter (model configured at onboard).
+- Edit a note on the desktop -> ~5-15 min later openclaw can answer a
+  question only that note answers (desktop sync + CronJob export + the
+  gateway's debounced reindex of the read-only mount).
+- Delete a note in Joplin -> it drops out of memory search after a cycle.
+- "Remember that I keep screws in the garage drawer" -> NEW session -> ask
+  where the screws are -> recalled (the answer is in
+  `/srv/appdata/openclaw/workspace/MEMORY.md` or `memory/*.md` - human
+  curable with any text editor).
 - `kubectl -n ai create job --from=cronjob/joplin-export joplin-export-manual`
-  completes green; OpenVikingDown fires on scale-to-0 and resolves.
+  completes green (no ov leg anymore).
+- `kubectl -n ai get deploy` -> openclaw 1/1, hermes 0/0, openviking 0/0;
+  no OpenVikingDown firing (its rule group is commented out in
+  `apps/observability/rules/prometheusrule.yaml`).
 
 ### Updates
 
-- Dependabot "ai" group (openviking + hermes images) -> merge PR ->
-  `make apply-ai` (Recreate restarts pods). Hermes swaps keep /opt/data
-  (entrypoint runs config migrations); OpenViking keeps ov.conf + the
-  workspace - read release notes before majors (0.5.0 flipped Working
-  Memory default off, etc.), tar `/srv/appdata/openviking` first.
-- npm pins inside `apps/ai/joplin-export/run.sh` (joplin 3.7.1,
-  @openviking/cli 0.4.23) are manual, like K3S_VERSION; bump the joplin
-  CLI in step with the desktop client's Joplin version.
-- Rollback = `git revert` + `make apply-ai`.
+- Dependabot "ai" group (openclaw + the disabled-but-listed openviking/hermes
+  images) -> merge PR -> `make apply-ai` (Recreate restarts pods). The image
+  entrypoint runs `openclaw doctor --fix` on start: agent DB schema
+  migrations happen under maintenance ownership with pre-migration `.bak`
+  copies kept in the state dir - KEEP those with the pre-upgrade backup
+  (disaster-recovery.md). Upstream releases are date-versioned and frequent
+  (`2026.x.y`); if Dependabot PR volume is annoying, add ignore rules.
+  Rollback = `git revert` + `make apply-ai` + restore any `.bak`/snapshot the
+  doctor took (see upstream "rollback" - the DB state must match the image).
+- Startup exit code 78 = "refused to migrate unsafe state" (source identity
+  conflicts, another writer, unwritable state) - do NOT delete lock files;
+  see the upstream health/docs flow instead.
+- npm pin inside `apps/ai/joplin-export/run.sh` (joplin 3.7.1) is manual,
+  like K3S_VERSION; bump the joplin CLI in step with the desktop client's
+  Joplin version.
+
+### Revert procedure (to Hermes + OpenViking)
+
+Everything upstream (Nextcloud, Joplin desktop, app password, secrets
+files) never changed; the state dirs and B2 backups were never touched:
+
+1. `apps/ai/hermes` + `apps/ai/openviking`: `replicas: 1`, re-add
+   `ingress.yaml` (+ `servicemonitor.yaml`) to their kustomizations.
+2. `apps/observability/rules/prometheusrule.yaml`: un-comment the `ai`
+   rule group.
+3. `apps/ai/joplin-export/run.sh` + kustomization: restore the ov CLI leg
+   from git history (npm install `@openviking/cli`, the ovcli.conf Secret
+   mount, `ov add-resource ... --to viking://resources/joplin`);
+   `secrets/ovcli.conf` is still on disk.
+4. `make apply-cluster` + `make apply-ai`; verify per the ORIGINAL plan's
+   AI-2/AI-3 checklists (operations.md git history / the AI-phase plan).
+5. openclaw: scale to 0 (`kubectl -n ai scale deploy/openclaw
+   --replicas=0` - or delete its manifests, owner's call).
+   `/srv/appdata/openclaw` retains its state either way.
 
 ### Troubleshooting
 
-- Logs: `kubectl -n ai logs deploy/hermes --tail=200` (gateway output is
-  also rotated under `/srv/appdata/hermes/logs/gateways/`),
-  `kubectl -n ai logs deploy/openviking --tail=200`, or the job logs
-  (the `ov add-resource` task id is in them).
-- OpenViking health surfaces: `/health` (liveness) and `/ready`
-  (readiness - AGFS/vectordb/embedding checks) on
-  https://openviking.home.jg-a.com; `/metrics` powers OpenVikingDown.
-- Sync-lock contention with the desktop client: the job is Forbid +
-  300s deadline; if runs start dying on the .lock, widen the schedule.
-- The hermes pod has NO kubeconfig, NO NC mounts, NO docker socket -
-  if a task seems to need them, that is by design (D6); use the skills
-  and the memory provider instead.
+- Logs: `kubectl -n ai logs deploy/openclaw --tail=200`; job logs for
+  joplin-export (the export tree swap is visible in them).
+- Health: `/healthz` (liveness), `/startupz` (readiness/startup admission)
+  in-pod or via the ingress; authenticated deep snapshot:
+  `kubectl -n ai exec deploy/openclaw -- node dist/index.js gateway health
+  --token "$OPENCLAW_GATEWAY_TOKEN"`.
+- Memory: `openclaw memory status --deep` (index + embedding provider),
+  `openclaw memory index --force` (rebuild), `openclaw memory search
+  "query"` (test retrieval from the CLI).
+- Sync-lock contention with the desktop client: the job is Forbid + 300s
+  deadline; if runs start dying on the .lock, widen the schedule.
+- The openclaw pod has NO kubeconfig, NO NC mounts, NO docker socket - if a
+  task seems to need them, that is by design (D6); agent sandboxing is
+  deferred (plan §8) - the pod boundary + default-deny netpol is the
+  isolation today.
+- Joplin export tree looks stale: check the CronJob logs first (joplin
+  reports "Completed" even on connection errors - check the profile DB,
+  not stdout, 2026-10-18 lesson).
 
 
 ## Known quirks (learned during migration)
