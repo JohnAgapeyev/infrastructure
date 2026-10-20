@@ -1,4 +1,10 @@
 # OpenViking context database - Hermes's memory provider (AI-1).
+# ** OC PHASE (2026-10-20): DISABLED (replicas: 0), NOT removed - openclaw
+# has its own builtin memory (MEMORY.md + memory/*.md + per-agent SQLite
+# index), so OpenViking has no consumer while Hermes is off. The manifest,
+# state dir /srv/appdata/openviking and B2 backups all stay for the revert
+# (docs/PLAN.md OC phase + plan §6). OpenVikingDown is suspended in
+# apps/observability/rules/prometheusrule.yaml for the same reason. **
 # Single instance BY DESIGN: the embedded local vector backend holds an
 # exclusive OS file lock on its workspace (`.openviking.lock`) -> replicas: 1
 # + Recreate, and NOTHING else may open /srv/appdata/openviking (the
@@ -23,7 +29,8 @@ metadata:
   namespace: ai
   labels: { app: openviking }
 spec:
-  replicas: 1
+  # OC phase: 0 = disabled (revert = 1). Was 1 while active.
+  replicas: 0
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: openviking }

@@ -1,19 +1,21 @@
-# Default-deny + explicit allows for the ai namespace (Hermes gateway,
-# OpenViking server, joplin-export CronJob). Same threat model and style
-# as cloud.yaml: a compromised pod pivoting to other cluster services or
-# the LAN; k3s enforces via its bundled network policy controller.
+# Default-deny + explicit allows for the ai namespace (OC phase: openclaw
+# gateway, joplin-export CronJob; hermes + openviking DISABLED - replicas: 0,
+# kept for revert). Same threat model and style as cloud.yaml: a compromised
+# pod pivoting to other cluster services or the LAN; k3s enforces via its
+# bundled network policy controller.
 #
 # Flow inventory this encodes:
 #   egress, all pods:
 #     - DNS            kube-dns (kube-system), UDP/TCP 53
-#     - same-namespace  hermes -> openviking:1933 (memory provider plugin),
-#                      joplin-export -> openviking:1933 (ov add-resource)
-#   egress, hermes + openviking + joplin-export: internet TCP 443
-#                      hermes: OpenRouter (chat model) + first-start plugin
-#                              lazy-installs (allow_lazy_installs default)
-#                      openviking: OpenRouter (embedding + VLM)
-#                      joplin-export: registry.npmjs.org (pinned joplin +
-#                              @openviking/cli installs each run)
+#     - same-namespace  kept generic (hermes -> openviking while active)
+#   egress, hermes + openviking + joplin-export + openclaw: internet TCP 443
+#                      openclaw: OpenRouter (chat model + memory-search
+#                              embeddings) + ClawHub skill/plugin installs
+#                      hermes/openviking: same via OpenRouter (disabled pods,
+#                              kept in the list so the revert needs no netpol
+#                              edit)
+#                      joplin-export: registry.npmjs.org (pinned joplin
+#                              install each run)
 #                      Private ranges excluded so a compromised pod cannot
 #                      pivot to the pod/service CIDRs, LAN, or the API server.
 #   egress, joplin-export only: Nextcloud WebDAV via Traefik, allowed to
@@ -30,16 +32,17 @@
 #                      for the k3s controller wiring bug + the aged-pod
 #                      testing procedure)
 #   ingress, all pods:
-#     - same-namespace  hermes <-> openviking calls above
-#     - kube-system    traefik (hermes dashboard + openviking studio/API
-#                      ingresses - ALL client traffic arrives via traefik)
-#     - observability  prometheus scrapes openviking /metrics (ServiceMonitor
-#                      lives in this ns, home-assistant precedent)
+#     - same-namespace  kept generic
+#     - kube-system    traefik (openclaw Control UI ingress - ALL client
+#                      traffic arrives via traefik)
+#     - observability  prometheus (kept for revert: openviking /metrics
+#                      scrape once its ServiceMonitor returns)
 #   NOTE: NO ai pod mounts or addresses /srv/appdata/nextcloud-data, and
 #   none reaches the cloud ns directly - the owner's Joplin notes are read
-#   through the official Joplin CLI over WebDAV (joplin-export) or through
-#   OpenViking. Nothing in this namespace talks to Nextcloud except
-#   joplin-export over HTTPS via Traefik.
+#   through the official Joplin CLI over WebDAV (joplin-export) and then
+#   indexed by openclaw from the export tree (read-only mount). Nothing in
+#   this namespace talks to Nextcloud except joplin-export over HTTPS via
+#   Traefik.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -68,7 +71,7 @@ spec:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
 ---
-# Same-namespace traffic (hermes -> openviking, joplin-export -> openviking).
+# Same-namespace traffic (kept generic; hermes -> openviking while active).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -81,7 +84,8 @@ spec:
     - to:
         - podSelector: {}
 ---
-# Internet 443 for the three app pods (see header). Private ranges
+# Internet 443 for the app pods (see header). hermes/openviking stay in the
+# list while disabled so the revert needs no netpol edit. Private ranges
 # excluded like cloud-egress-nextcloud-web-smtp.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -91,7 +95,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app, operator: In, values: [hermes, openviking, joplin-export] }
+      - { key: app, operator: In, values: [hermes, openviking, joplin-export, openclaw] }
   policyTypes: [Egress]
   egress:
     - to:
@@ -139,7 +143,8 @@ spec:
         - { protocol: TCP, port: 8443 }
         - { protocol: TCP, port: 8080 }
 ---
-# Ingress: same-ns, kube-system (traefik), observability (prometheus).
+# Ingress: same-ns, kube-system (traefik - the openclaw Control UI), 
+# observability (prometheus; openviking /metrics once re-enabled).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

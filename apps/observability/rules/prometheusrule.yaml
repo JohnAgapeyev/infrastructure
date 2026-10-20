@@ -131,20 +131,24 @@ spec:
           annotations:
             summary: "Nextcloud scrape errors ({{ $labels.cause }})"
             description: "nextcloud-exporter reports persistent scrape errors (cause: {{ $labels.cause }}). Most often an expired app password: re-mint via OCS getapppassword and update secrets/nextcloud-exporter.env."
-    - name: ai
-      rules:
-        - alert: OpenVikingDown
-          # AI phase. The openviking ServiceMonitor (apps/ai/openviking,
-          # home-assistant in-namespace precedent) scrapes /metrics.
-          # Down = Hermes's memory recall degrades (plugin prefetch fails)
-          # and joplin-export upserts vanish into job logs. absent() covers
-          # the scrape target vanishing (scale-to-0 quirk, NextcloudDown
-          # precedent). Warning, not critical: a memory-layer outage is
-          # never wake-worthy (2026-10-17 severity reasoning).
-          expr: up{job="openviking"} == 0 or absent(up{job="openviking"})
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "OpenViking scrape is down (10m)"
-            description: "Prometheus cannot scrape openviking /metrics. Check `kubectl -n ai get pods`, https://openviking.home.jg-a.com/health and `kubectl -n ai logs deploy/openviking`."
+    # ** OC PHASE (2026-10-20): the whole `ai` rule group is SUSPENDED -
+    # its only alert (OpenVikingDown) watched the now-disabled openviking
+    # scrape. Revert = un-comment the block (and re-enable openviking's
+    # servicemonitor - see apps/ai/openviking/kustomization.yaml). **
+    # - name: ai
+    #   rules:
+        # - alert: OpenVikingDown
+        #   # AI phase. The openviking ServiceMonitor (apps/ai/openviking,
+        #   # home-assistant in-namespace precedent) scrapes /metrics.
+        #   # Down = Hermes's memory recall degrades (plugin prefetch fails)
+        #   # and joplin-export upserts vanish into job logs. absent() covers
+        #   # the scrape target vanishing (scale-to-0 quirk, NextcloudDown
+        #   # precedent). Warning, not critical: a memory-layer outage is
+        #   # never wake-worthy (2026-10-17 severity reasoning).
+        #   expr: up{job="openviking"} == 0 or absent(up{job="openviking"})
+        #   for: 10m
+        #   labels:
+        #     severity: warning
+        #   annotations:
+        #     summary: "OpenViking scrape is down (10m)"
+        #     description: "Prometheus cannot scrape openviking /metrics. Check `kubectl -n ai get pods`, https://openviking.home.jg-a.com/health and `kubectl -n ai logs deploy/openviking`."

@@ -1,4 +1,10 @@
 # Hermes Agent gateway (Nous Research) - AI-3.
+# ** OC PHASE (2026-10-20): DISABLED (replicas: 0), NOT removed - the agent
+# workload moved to openclaw (apps/ai/openclaw). The manifest, state dir
+# /srv/appdata/hermes and B2 backups all stay so the owner can revert the
+# whole decision (docs/PLAN.md OC phase + plan §6: replicas back to 1,
+# re-enable ingress.yaml in this kustomization, re-add the ov CronJob leg,
+# un-suspend OpenVikingDown, make apply-ai). **
 # The image ENTRYPOINT is an s6-overlay dispatcher; `gateway run` passed as
 # args becomes the supervised main service, with the web dashboard
 # supervised alongside it (HERMES_DASHBOARD=1). s6 needs the container to
@@ -21,7 +27,8 @@ metadata:
   namespace: ai
   labels: { app: hermes }
 spec:
-  replicas: 1
+  # OC phase: 0 = disabled (revert = 1). Was 1 while active.
+  replicas: 0
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: hermes }

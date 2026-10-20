@@ -3,5 +3,9 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
-  - servicemonitor.yaml
+  # OC phase: ingress.yaml + servicemonitor.yaml stay in this dir but are
+  # NOT applied while the deployment is disabled (replicas: 0) - the
+  # ingress would 503 and the ServiceMonitor would keep a dead scrape
+  # target (OpenVikingDown would page via absent()). Revert = re-add both.
+  # - ingress.yaml
+  # - servicemonitor.yaml
