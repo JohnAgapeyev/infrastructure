@@ -16,9 +16,11 @@ secretGenerator:
     namespace: ai
     env: ../../../secrets/joplin.env
     type: Opaque
-  # ov CLI connection (user API key). Mounted read-only; the job copies it
-  # to a writable location because `ov language` writes to the config.
-  - name: ovcli-conf
-    namespace: ai
-    files:
-      - ovcli.conf=../../../secrets/ovcli.conf
+  # OC phase: the ovcli-conf generator (ov CLI connection) is REMOVED -
+  # openclaw indexes the export tree directly. secrets/ovcli.conf +
+  # secrets/ovcli.conf.example stay on disk for the revert procedure
+  # (~/.opencode/plan/openclaw-joplin.md §6): re-add
+  #   - name: ovcli-conf
+  #     namespace: ai
+  #     files:
+  #       - ovcli.conf=../../../secrets/ovcli.conf
