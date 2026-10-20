@@ -450,18 +450,29 @@ files) never changed; the state dirs and B2 backups were never touched:
   (state is on the hostPath). If it OOMs again, `openclaw gateway
   diagnostics export` inside the pod reports the worker breakdown.
 - Model "Test Connection" failing while chat works (2026-10-20 go-live
-  lesson): the UI probe runs an embedded agent session with a tiny
-  generation budget; with `thinking=medium` (the onboard default) the
-  reasoning model burns the whole probe budget on reasoning tokens ->
-  EMPTY content -> the probe reports "The connection check failed" even
-  though the API call returned HTTP 200 (visible in logs as
-  `[model-fetch] response ... status=200 contentType=text/event-stream`
-  right next to the failed probes). Fix: `openclaw config set
-  agents.defaults.thinkingDefault off`. Thinking can still be enabled
-  per-session in the Control UI. If it recurs after re-enabling
-  thinking, the probe failure is cosmetic - trust a real chat turn.
-  (The CLI probe `openclaw models status --probe` refuses to run while
-  the gateway owns the state dir - by design; verify from the UI.)
+  lesson, ROOT CAUSE FOUND in /app/dist): the UI probe generates with a
+  HARD-CODED `PROBE_MAX_TOKENS = 8` and inherits the agent
+  `thinkingDefault` - with `thinking=medium` (the onboard default) the
+  reasoning model burns all 8 tokens on reasoning before any content ->
+  EMPTY content -> "The connection check failed" even though the API
+  call returned HTTP 200 (gateway log shows `[model-fetch] response
+  provider=openrouter ... status=200` right next to the failed probes).
+  There is NO separate probe/chat thinking knob (the probe module has
+  no thinking handling; the CLI's --probe-max-tokens flag is not used
+  by the UI button). ACCEPTED POSTURE: keep
+  `agents.defaults.thinkingDefault: medium` (good for real chats) and
+  treat the Test Connection button as UNRELIABLE FOR REASONING MODELS -
+  a green chat turn is the real connection test. Diagnostic if the
+  probe fails: `[model-fetch] response ... status=200` in gateway logs
+  + a chat turn. (`openclaw models status --probe` refuses to run while
+  the gateway owns the state dir - by design.)
+- Stale auth profiles (2026-10-20): each UI/CLI model-setup retry saved
+  a new `openrouter:setup-*` auth profile in the agent SQLite; the UI
+  probe iterates ALL of them (the 4 error lines were 3 stale profiles +
+  the configured credential). Cleaned with `openclaw models auth logout
+  <id> --yes` (the plain form refuses without --yes). The deployment's
+  env SecretRef is what actually authenticates - the stored profiles
+  were redundant duplicates.
 - Health: `/healthz` (liveness AND readiness - GO-LIVE LESSON 2026-10-20:
   `/startupz` + `/readyz` answer 403 to non-loopback clients even with the
   token, so the kubelet's pod-IP probes can never pass; both probes use
