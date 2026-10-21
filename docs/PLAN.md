@@ -134,14 +134,20 @@ ai-egress-internet-https app list; openclaw stays listed (revert needs
 no netpol edit). Dependabot: ghcr.io/letta-ai/letta-code added to the
 "ai" group. Backups: letta *.db/*.sqlite snapshotted (generic find -
 local backend paths are unpredictable; VERIFY SQLite at go-live) +
-live copies excluded from the B2 sync (openclaw class). VERIFY-on-
-first-boot items: image runtime UID = root vs the hostPath (C1
-lineage), PORT binds non-loopback so the Service/ingress + /readyz
-probes can reach it (else `server --listen` args per the App Server
-quickstart), /readyz answers from the pod IP (the openclaw /startupz
-loopback-gate lesson), WS streaming through Traefik (the NC-phase
-readTimeout lesson applies to HTTP, WS should upgrade cleanly), memory
-limit 2Gi (openclaw OOM lesson - raise before debugging anything else).
+live copies excluded from the B2 sync (openclaw class). GO-LIVE
+2026-10-21, lessons (full list in operations.md "AI ops"): the image's
+DEFAULT command is the interactive CLI (crash-loop) - the Deployment
+starts it via `server --backend local --listen ws://0.0.0.0:4500
+--ws-auth capability-token --ws-token-file <tmpfs>` (a shell wrapper
+writes the secret token to an emptyDir-Memory file; args cannot
+reference Secrets); `--listen` url REQUIRED (no url = loopback only),
+non-loopback listeners REQUIRE --ws-auth; image runs as root;
+/readyz 200 from pod-IP probes; WS 101 + bearer token through Traefik
+(HTTP/2 curl pitfall: test WS with --http1.1); 401 on bad/missing
+token; no SQLite in state yet, no OOMKills at 2Gi. REMAINING VERIFY: a
+chat turn via OpenRouter + an agent reading a note from
+/mnt/joplin-export (needs an agent created - Agent SDK remote backend,
+https://letta.home.jg-a.com).
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live

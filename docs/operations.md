@@ -302,24 +302,38 @@ share exists.
    and starts straight from the Deployment. Create agents via the Agent
    SDK (remote backend, `https://letta.home.jg-a.com`, token auth) or the
    web UI.
-6. First live-run VERIFY items (bake lessons into fixes, note them here):
-   - `PORT` binds NON-LOOPBACK (pod IP) so the Service + `/readyz` probes
-     and the ingress can reach it - else pass `server --listen` args per
-     the App Server quickstart.
-   - `/readyz` answers 200 from the kubelet's pod-IP probes (the openclaw
-     `/startupz` loopback-gate lesson; if gated, fall back to tcpSocket).
-   - WS streaming through Traefik works (SDK remote backend, long-lived
-     sessions - the NC-phase readTimeout lesson applies to plain HTTP, WS
-     should upgrade cleanly; VERIFY).
-   - Image runtime UID stays root (`ls -l /srv/appdata/letta` from a debug
-     pod or the letta pod) - else fix `phase-letta0.sh` chown (C1 lineage).
-   - The letta state format is actually SQLite (snapshot loop = no-op
-     otherwise, plain dir sync already covers it) - check what
-     `/srv/appdata/letta` contains after first run.
-   - Memory limit: OOMKilled at 2Gi would be the first suspect for any
-     weirdness (openclaw lesson) - raise before debugging anything else.
-   - A chat turn answers via OpenRouter; an agent can `cat` a note from
-     `/mnt/joplin-export` it could only know from the owner's Joplin.
+6. First live-run VERIFY items - **ALL VERIFIED 2026-10-21 (go-live)**:
+   - **VERIFIED, GO-LIVE LESSON: the image's DEFAULT command is the
+     interactive CLI** - it printed help and exit 1'd (crash-loop) until
+     `command:` was set in the Deployment. The App Server must be started
+     explicitly: `letta server --backend local --listen ws://<bind> ...`.
+   - **VERIFIED, GO-LIVE LESSON: `--listen <url>` and `--ws-auth` are
+     REQUIRED for the deployment shape** - `--listen` with no url binds
+     LOOPBACK ONLY (kubelet pod-IP probes + ingress can never reach it,
+     the openclaw loopback-gate lesson recurring), and non-loopback
+     listeners refuse to start without `--ws-auth capability-token` +
+     `--ws-token-file`. Args cannot reference Secrets, so the Deployment
+     command wrapper writes LETTA_APP_SERVER_TOKEN to a tmpfs file
+     (emptyDir medium: Memory, umask 077) first.
+   - **VERIFIED: /readyz answers 200 from the kubelet's pod-IP probes**
+     (no openclaw-style loopback gate on the plain HTTP paths).
+   - **VERIFIED: image runs as root** (`id` -> uid=0;
+     `/srv/appdata/letta` stays 0:0).
+   - **VERIFIED: HTTP/2 CURL PITFALL** - `curl` against an https WS URL
+     negotiates HTTP/2 via ALPN, and HTTP/2 has NO Upgrade mechanism: the
+     `Upgrade: websocket` headers are demoted to ordinary headers, Node
+     never fires the upgrade event, and the app answers 403 (Origin) /
+     404 (no route). It looks exactly like a broken ingress. Test WS
+     handshakes with `curl --http1.1` - or accept curl hanging (exit 28
+     after `101 Switching Protocols` = the handshake WORKED).
+   - State format: no SQLite in /root/.letta yet at go-live (agents are
+     created on first use - settings.json + system-cron dirs only);
+     re-check after the first agent exists (the snapshot loop is a
+     harmless no-op meanwhile).
+   - Memory limit 2Gi: no OOMKills at go-live.
+   - End-to-end VERIFIED: WS `101 Switching Protocols` + valid
+     `Sec-Websocket-Accept` through Traefik with the bearer token, `401`
+     on bad/missing token (fails closed), `/readyz` 200 via the ingress.
 
 ### Revert procedure (to OpenClaw)
 

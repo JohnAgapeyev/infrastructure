@@ -6,24 +6,33 @@
 # Dockerfile pins ghcr.io/letta-ai/letta-code (npm releases get a matching
 # container via their release automation - the 0.34.20 npm tag had no image
 # yet at pin time, 0.34.19 is the newest published). Self-hosting guide:
-# expose PORT (default 4500), persist /root/.letta, set
-# LETTA_APP_SERVER_TOKEN + a model provider key, health-check /readyz.
-# `letta server --backend local` is env-driven (no onboard wizard, unlike
-# openclaw) - command/args left UNSET so the image entrypoint runs its
-# default server startup.
-# Model provider: OpenRouter via OPENROUTER_API_KEY - the same shared key
-# every ai-ns agent has used since the AI phase (D15 lineage).
+# persist /root/.letta, set LETTA_APP_SERVER_TOKEN + a model provider key,
+# health-check /readyz.
+# GO-LIVE LESSON 2026-10-21: the image's DEFAULT command is the interactive
+# CLI - it prints help and exits (crash-loop, exit 1). The App Server must
+# be started explicitly. `letta server --help` on 0.34.19:
+#   - `--listen` with NO url binds LOOPBACK ONLY -> pass
+#     ws://0.0.0.0:4500 explicitly (the pod-IP probe lesson came true).
+#   - non-loopback listeners REQUIRE `--ws-auth` (+ token file) - the
+#     capability token is the LETTA_APP_SERVER_TOKEN secret, which args
+#     cannot reference directly, so the shell wrapper below writes it to
+#     an emptyDir file first (root-owned tmpfs, 0600, dropped on pod death).
+# PORT env alone does NOT configure the bind; --listen does.
+# `letta server --backend local` per the self-hosting guide; no --channels
+# (D14 lineage: no messaging channels), no --openai-api (attack surface).
+# VERIFIED 2026-10-21: /readyz 200 from the kubelet's pod-IP probes; WS
+# 101 + bearer token through Traefik (see operations.md for the HTTP/2
+# curl pitfall); 401 on bad/missing token.
 # Joplin notes: the export tree is mounted READ-ONLY at /mnt/joplin-export
 # (D13 lineage) - the agent may read notes via its filesystem tools, but
 # there is no openclaw-style indexed search (accepted degradation, owner
 # decision at planning); curation stays in Joplin itself.
 # All state (agents, MemFS repositories, memory) is /root/.letta ->
-# /srv/appdata/letta. The upstream image runs as root (state lives under
-# /root) - VERIFY on first boot if that ever changes.
+# /srv/appdata/letta. The upstream image runs as root (VERIFIED 2026-10-21:
+# `id` -> uid=0).
 # One server owns the state dir -> replicas: 1 + Recreate.
 # LETTA_SKIP_KEYCHAIN_CHECK=1: file-based token persistence (upstream
-# default for containers without a keychain - .env.example of the
-# deployment repo).
+# .env.example default for containers without a keychain).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,14 +51,30 @@ spec:
       containers:
         - name: letta
           image: ghcr.io/letta-ai/letta-code:0.34.19
+          # GO-LIVE LESSON 2026-10-21: the image's default command is the
+          # interactive CLI - it prints help and exits (crash-loop, exit 1).
+          # Start the App Server explicitly. `--listen <url>` is REQUIRED
+          # for a non-loopback bind (no url = loopback only), and
+          # non-loopback listeners REQUIRE `--ws-auth` + a token file.
+          # Args cannot reference Secrets, so the wrapper writes
+          # LETTA_APP_SERVER_TOKEN to a tmpfs file (umask 077, 0600) for
+          # --ws-token-file. No --channels (D14 lineage), no --openai-api
+          # (attack surface).
+          command:
+            - /bin/sh
+            - -c
+            - |
+              umask 077
+              printf '%s' "$LETTA_APP_SERVER_TOKEN" > /tmp/letta-ws-token
+              exec letta server --backend local \
+                --listen ws://0.0.0.0:4500 \
+                --ws-auth capability-token \
+                --ws-token-file /tmp/letta-ws-token
           env:
-            # Upstream self-hosting: expose PORT (default 4500). VERIFY on
-            # first boot that the server binds non-loopback (pod IP) - if
-            # not, pass `server --listen` args per the App Server quickstart.
-            - { name: PORT, value: "4500" }
             - name: LETTA_APP_SERVER_TOKEN
               valueFrom: { secretKeyRef: { name: letta-env, key: LETTA_APP_SERVER_TOKEN } }
-            - { name: OPENROUTER_API_KEY, valueFrom: { secretKeyRef: { name: letta-env, key: OPENROUTER_API_KEY } } }
+            - name: OPENROUTER_API_KEY
+              valueFrom: { secretKeyRef: { name: letta-env, key: OPENROUTER_API_KEY } }
             - { name: LETTA_SKIP_KEYCHAIN_CHECK, value: "1" }
           ports:
             - { name: http, containerPort: 4500 }
@@ -78,8 +103,14 @@ spec:
             # D13 lineage: read-only - the agent can never modify the
             # owner's notes; curation happens in Joplin itself.
             - { name: joplin-export, mountPath: /mnt/joplin-export, readOnly: true }
+            # tmpfs /tmp for the ws capability-token file (see command)
+            - { name: tmp, mountPath: /tmp }
       volumes:
         - name: data
           hostPath: { path: /srv/appdata/letta, type: Directory }
         - name: joplin-export
           hostPath: { path: /srv/appdata/joplin-export, type: Directory }
+        # scratch for the ws capability-token file written by the command
+        # wrapper (tmpfs - dies with the pod, never touches the hostPath)
+        - name: tmp
+          emptyDir: { medium: Memory }
