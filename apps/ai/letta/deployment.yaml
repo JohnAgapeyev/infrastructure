@@ -1,0 +1,85 @@
+# Letta App Server (letta-code) - LET phase, replacing openclaw as the ai-ns
+# agent (openclaw DISABLED - replicas: 0, kept for revert - same pattern as
+# hermes/openviking before it; see docs/PLAN.md LET phase + operations.md
+# "AI ops" revert runbook).
+# Official first-party image: the letta-app-server-deployment repo's
+# Dockerfile pins ghcr.io/letta-ai/letta-code (npm releases get a matching
+# container via their release automation - the 0.34.20 npm tag had no image
+# yet at pin time, 0.34.19 is the newest published). Self-hosting guide:
+# expose PORT (default 4500), persist /root/.letta, set
+# LETTA_APP_SERVER_TOKEN + a model provider key, health-check /readyz.
+# `letta server --backend local` is env-driven (no onboard wizard, unlike
+# openclaw) - command/args left UNSET so the image entrypoint runs its
+# default server startup.
+# Model provider: OpenRouter via OPENROUTER_API_KEY - the same shared key
+# every ai-ns agent has used since the AI phase (D15 lineage).
+# Joplin notes: the export tree is mounted READ-ONLY at /mnt/joplin-export
+# (D13 lineage) - the agent may read notes via its filesystem tools, but
+# there is no openclaw-style indexed search (accepted degradation, owner
+# decision at planning); curation stays in Joplin itself.
+# All state (agents, MemFS repositories, memory) is /root/.letta ->
+# /srv/appdata/letta. The upstream image runs as root (state lives under
+# /root) - VERIFY on first boot if that ever changes.
+# One server owns the state dir -> replicas: 1 + Recreate.
+# LETTA_SKIP_KEYCHAIN_CHECK=1: file-based token persistence (upstream
+# default for containers without a keychain - .env.example of the
+# deployment repo).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: letta
+  namespace: ai
+  labels: { app: letta }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: letta }
+  template:
+    metadata:
+      labels: { app: letta }
+    spec:
+      containers:
+        - name: letta
+          image: ghcr.io/letta-ai/letta-code:0.34.19
+          env:
+            # Upstream self-hosting: expose PORT (default 4500). VERIFY on
+            # first boot that the server binds non-loopback (pod IP) - if
+            # not, pass `server --listen` args per the App Server quickstart.
+            - { name: PORT, value: "4500" }
+            - name: LETTA_APP_SERVER_TOKEN
+              valueFrom: { secretKeyRef: { name: letta-env, key: LETTA_APP_SERVER_TOKEN } }
+            - { name: OPENROUTER_API_KEY, valueFrom: { secretKeyRef: { name: letta-env, key: OPENROUTER_API_KEY } } }
+            - { name: LETTA_SKIP_KEYCHAIN_CHECK, value: "1" }
+          ports:
+            - { name: http, containerPort: 4500 }
+          # Upstream's documented health endpoint (/readyz is what their
+          # Railway/Fly configs check). tcpSocket fallback not needed unless
+          # go-live proves otherwise.
+          startupProbe:
+            httpGet: { path: /readyz, port: 4500 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /readyz, port: 4500 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /readyz, port: 4500 }
+            periodSeconds: 30
+          resources:
+            # Lighter than openclaw (its 4Gi limit was model-catalog +
+            # worker-pool specific, 2026-10-20 lesson). VERIFY at go-live;
+            # OOMLesson applies - raise the limit before debugging anything
+            # else.
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - { name: data, mountPath: /root/.letta }
+            # D13 lineage: read-only - the agent can never modify the
+            # owner's notes; curation happens in Joplin itself.
+            - { name: joplin-export, mountPath: /mnt/joplin-export, readOnly: true }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/letta, type: Directory }
+        - name: joplin-export
+          hostPath: { path: /srv/appdata/joplin-export, type: Directory }

@@ -39,15 +39,15 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   apply there. The cloud ns (NC phase) is default-deny too: DNS +
   same-ns (postgres/redis), internet + SMTP egress for the nextcloud pod
   only, ingress from traefik/observability - no LAN allow needed (all
-  clients go through Traefik). The ai ns (OC phase) is default-deny:
-  DNS + same-ns (generic), internet 443 (OpenRouter/npm - openclaw,
-  joplin-export, and the disabled hermes/openviking pods stay in the
-  allow list for revert), Nextcloud WebDAV for the joplin-export job
-  only via the node IP (Traefik - so cloud needs no edit), ingress from
-  traefik + observability; no ai pod mounts or reads
+  clients go through Traefik). The ai ns (LET phase) is default-deny:
+  DNS + same-ns (generic), internet 443 (OpenRouter/npm - letta,
+  joplin-export, and the disabled openclaw/hermes/openviking pods stay
+  in the allow list for revert), Nextcloud WebDAV for the joplin-export
+  job only via the node IP (Traefik - so cloud needs no edit), ingress
+  from traefik + observability; no ai pod mounts or reads
   `/srv/appdata/nextcloud-data` (the owner's Joplin notes are reached
-  only through the official Joplin CLI over WebDAV, then indexed from
-  the export tree via openclaw's read-only mount).
+  only through the official Joplin CLI over WebDAV, then read from the
+  export tree via letta's read-only mount).
 
 ## Services
 
@@ -66,7 +66,8 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
 | nextcloud (+ postgres, redis) | family cloud: files, photos (memories), calendar/contacts (NC phase) | `nextcloud:35.0.2-apache`, `postgres:18.6`, `redis:8.10.2-alpine` in `apps/cloud/` |
 | openviking | context database = Hermes's memory/knowledge store (AI phase; **OC phase: disabled** - replicas 0, kept for revert) | `ghcr.io/volcengine/openviking:v0.5.0` in `apps/ai/openviking` |
 | hermes | AI agent gateway + web dashboard (AI phase; **OC phase: disabled** - replicas 0, kept for revert) | `nousresearch/hermes-agent:v0.22.2` in `apps/ai/hermes` |
-| openclaw | AI agent gateway + Control UI + builtin memory (OC phase; Joplin notes indexed read-only from the export tree) | `ghcr.io/openclaw/openclaw:2026.10.5` in `apps/ai/openclaw` |
+| openclaw | AI agent gateway + Control UI + builtin memory (OC phase; **LET phase: disabled** - replicas 0, kept for revert) | `ghcr.io/openclaw/openclaw:2026.10.5` in `apps/ai/openclaw` |
+| letta | Letta App Server: stateful agents + Agent SDK remote backend (LET phase; Joplin notes read read-only from the export tree via filesystem tools) | `ghcr.io/letta-ai/letta-code:0.34.19` in `apps/ai/letta` |
 | joplin-export | official Joplin CLI sync client -> clean md export tree (CronJob, */5; the openviking upsert leg was removed in OC) | `node:24.22.0-bookworm-slim` + `joplin@3.7.1` in `apps/ai/joplin-export` |
 | kube-prometheus-stack | metrics/alerts/dashboards | umbrella chart in `apps/observability/` |
 | cert-manager | TLS issuance (LE wildcard via Cloudflare DNS-01) | `v1.21.2` pinned, `scripts/install-cert-manager.sh` |

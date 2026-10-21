@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  # App Server token + the shared OpenRouter key (chat + embeddings -
+  # the same key every ai-ns agent has used since the AI phase).
+  # No config files: the App Server is env-driven (unlike openclaw, whose
+  # openclaw.json was first-run onboard product on the state dir).
+  - name: letta-env
+    namespace: ai
+    env: ../../../secrets/letta.env
+    type: Opaque

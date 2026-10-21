@@ -218,9 +218,10 @@ HA/matter together).
 | Alertmanager | https://alertmanager.home.jg-a.com | |
 | Home Assistant | https://ha.home.jg-a.com | http://nas:8123 |
 | Nextcloud | https://nextcloud.home.jg-a.com | |
-| Hermes (AI, OC phase: disabled) | ~~https://hermes.home.jg-a.com~~ | |
-| OpenViking (AI, OC phase: disabled) | ~~https://openviking.home.jg-a.com~~ (Web Studio at `/studio`) | |
-| OpenClaw (AI) | https://openclaw.home.jg-a.com (Control UI; gateway-token auth) | |
+| Hermes (AI, LET phase: disabled) | ~~https://hermes.home.jg-a.com~~ | |
+| OpenViking (AI, LET phase: disabled) | ~~https://openviking.home.jg-a.com~~ (Web Studio at `/studio`) | |
+| OpenClaw (AI, LET phase: disabled) | ~~https://openclaw.home.jg-a.com~~ (Control UI; gateway-token auth) | |
+| Letta (AI) | https://letta.home.jg-a.com (App Server; LETTA_APP_SERVER_TOKEN auth) | |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
 apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms). Nextcloud:
@@ -266,7 +267,85 @@ generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
   Backups section + [disaster-recovery.md](disaster-recovery.md)).
 
 
-## AI ops (OpenClaw + joplin-export; OC phase - Hermes/OpenViking disabled)
+## AI ops (Letta + joplin-export; LET phase - OpenClaw/Hermes/OpenViking disabled)
+
+Design + decisions: `docs/PLAN.md` LET phase (2026-10-21). Namespace `ai`
+(`apps/ai/`): **letta** (App Server `ghcr.io/letta-ai/letta-code:0.34.19` -
+first-party image, same tag the upstream deployment repo pins; port 4500,
+`/readyz` probes, `LETTA_APP_SERVER_TOKEN` auth, env-driven - no onboard
+wizard; state `/root/.letta` -> `/srv/appdata/letta`, OpenRouter provider),
+**joplin-export** (CronJob */5: official Joplin CLI sync client -> clean
+markdown export tree; letta's agent READS the tree via the read-only
+`/mnt/joplin-export` mount + filesystem tools - NO indexed search, an
+accepted degradation vs openclaw's `memory.search.extraPaths`), **hermes +
+openviking + openclaw DISABLED** (`replicas: 0`, ingresses out of their
+kustomizations, manifests/state/backups kept for revert - the OC phase
+established the pattern and operations.md git history holds its runbooks).
+Nothing reads the Nextcloud Joplin sync directory; no NC service account or
+share exists.
+
+### Go-live order (LET phase - repo work is done; these are the owner steps)
+
+1. `sudo bash bootstrap/host/phase-letta0.sh` - creates `/srv/appdata/letta`
+   (owned 0:0; the upstream image runs as root - VERIFY on first boot).
+2. Fill secrets (placeholders committed as `*.example`):
+   `secrets/letta.env` - `LETTA_APP_SERVER_TOKEN` (`openssl rand -hex 32`) +
+   `OPENROUTER_API_KEY` (the same key every ai-ns agent has used since the
+   AI phase).
+3. `sudo cp bootstrap/host/rclone-backup-dropin.conf
+   /etc/systemd/system/rclone-backup.service.d/override.conf` (new
+   excludes: letta live sqlite/db) **and** `sudo cp
+   scripts/snapshot-sqlite.sh /srv/appdata/_scripts/snapshot-sqlite.sh`
+   (new letta snapshot loop) - neither host file updates itself.
+4. `make apply-cluster` (netpol updates) and `make apply-ai`.
+5. No interactive first run (unlike openclaw): the App Server is env-driven
+   and starts straight from the Deployment. Create agents via the Agent
+   SDK (remote backend, `https://letta.home.jg-a.com`, token auth) or the
+   web UI.
+6. First live-run VERIFY items (bake lessons into fixes, note them here):
+   - `PORT` binds NON-LOOPBACK (pod IP) so the Service + `/readyz` probes
+     and the ingress can reach it - else pass `server --listen` args per
+     the App Server quickstart.
+   - `/readyz` answers 200 from the kubelet's pod-IP probes (the openclaw
+     `/startupz` loopback-gate lesson; if gated, fall back to tcpSocket).
+   - WS streaming through Traefik works (SDK remote backend, long-lived
+     sessions - the NC-phase readTimeout lesson applies to plain HTTP, WS
+     should upgrade cleanly; VERIFY).
+   - Image runtime UID stays root (`ls -l /srv/appdata/letta` from a debug
+     pod or the letta pod) - else fix `phase-letta0.sh` chown (C1 lineage).
+   - The letta state format is actually SQLite (snapshot loop = no-op
+     otherwise, plain dir sync already covers it) - check what
+     `/srv/appdata/letta` contains after first run.
+   - Memory limit: OOMKilled at 2Gi would be the first suspect for any
+     weirdness (openclaw lesson) - raise before debugging anything else.
+   - A chat turn answers via OpenRouter; an agent can `cat` a note from
+     `/mnt/joplin-export` it could only know from the owner's Joplin.
+
+### Revert procedure (to OpenClaw)
+
+Everything upstream (Nextcloud, Joplin desktop, app password, secrets
+files) never changed; the state dirs and B2 backups were never touched
+(openclaw's snapshot loop + rclone excludes stay in place while disabled):
+
+1. `apps/ai/openclaw`: `replicas: 1` (was 0), re-add `- ingress.yaml` to
+   its kustomization.
+2. `apps/ai/letta`: scale to 0 (`kubectl -n ai scale deploy/letta
+   --replicas=0`) or delete its manifests - owner's call;
+   `/srv/appdata/letta` retains its state either way. `make apply-ai`.
+   (`secrets/letta.env`, the netpol list entry and the Dependabot pattern
+   can stay - they are needed again only on a future re-enable.)
+3. No openclaw onboard rerun needed: its state dir
+   `/srv/appdata/openclaw` (incl. `openclaw.json`, agents, memory) was
+   never touched while disabled. If a `doctor`-style upgrade happened
+   upstream while disabled, the Dependabot PR + `openclaw doctor --fix`
+   startup path handles the migrations (see Updates below).
+4. Reindex the Joplin tree in case notes changed while openclaw was down:
+   `kubectl -n ai exec deploy/openclaw -- openclaw memory index --force`
+   (then `openclaw memory status`).
+5. Verify per the OC-phase checklist below (operations.md git history +
+   `docs/PLAN.md` OC phase).
+
+### OC phase (historical - OpenClaw go-live + revert runbooks)
 
 Design + decisions: `~/.opencode/plan/openclaw-joplin.md` (D10-D17;
 supersedes the AI-phase plan `~/.opencode/plan/hermes-openviking-joplin.md`,
@@ -279,7 +358,7 @@ markdown export tree; openclaw indexes the tree READ-ONLY via
 (`replicas: 0`, manifests/state/backups kept for revert). Nothing reads the
 Nextcloud Joplin sync directory; no NC service account or share exists.
 
-### Go-live order (repo work is done; these are the owner steps)
+#### Go-live order (repo work was done; these were the owner steps)
 
 1. `sudo bash bootstrap/host/phase-oc0.sh` - creates `/srv/appdata/openclaw`
    (owned 1000:1000 = the image's `node` user).
@@ -330,7 +409,7 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
    `kubectl -n ai exec deploy/openclaw -- openclaw memory index --force`
    (then `openclaw memory status`).
 
-### First live-run VERIFY items
+#### First live-run VERIFY items (OC phase)
 
 - VERIFIED 2026-10-18 (joplin CLI, unchanged): one-shot commands are
   non-interactive by default (NO `--non-interactive` flag exists); sync
@@ -381,7 +460,7 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
   is the runbook answer to "search stopped returning results" after a
   config change.
 
-### End-to-end checks
+#### End-to-end checks (OC phase)
 
 - `curl https://openclaw.home.jg-a.com/healthz` (or in-pod) -> ok; Control
   UI loads over the ingress and authenticates with the gateway token.
@@ -402,23 +481,26 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
 
 ### Updates
 
-- Dependabot "ai" group (openclaw + the disabled-but-listed openviking/hermes
-  images) -> merge PR -> `make apply-ai` (Recreate restarts pods). The image
-  entrypoint runs `openclaw doctor --fix` on start: agent DB schema
-  migrations happen under maintenance ownership with pre-migration `.bak`
-  copies kept in the state dir - KEEP those with the pre-upgrade backup
-  (disaster-recovery.md). Upstream releases are date-versioned and frequent
-  (`2026.x.y`); if Dependabot PR volume is annoying, add ignore rules.
-  Rollback = `git revert` + `make apply-ai` + restore any `.bak`/snapshot the
-  doctor took (see upstream "rollback" - the DB state must match the image).
-- Startup exit code 78 = "refused to migrate unsafe state" (source identity
-  conflicts, another writer, unwritable state) - do NOT delete lock files;
-  see the upstream health/docs flow instead.
+- Dependabot "ai" group (letta + the disabled-but-listed
+  openclaw/openviking/hermes images) -> merge PR -> `make apply-ai`
+  (Recreate restarts pods). letta releases are frequent npm/container
+  tags (`0.x.y`); if Dependabot PR volume is annoying, add ignore rules.
+  VERIFY after the first image bump that the state format still matches
+  the snapshot loop (see LET go-live VERIFY items).
+- openclaw (OC phase, historical): the image entrypoint runs
+  `openclaw doctor --fix` on start: agent DB schema migrations happen
+  under maintenance ownership with pre-migration `.bak` copies kept in
+  the state dir - KEEP those with the pre-upgrade backup
+  (disaster-recovery.md). Startup exit code 78 = "refused to migrate
+  unsafe state" (source identity conflicts, another writer, unwritable
+  state) - do NOT delete lock files; see the upstream health/docs flow
+  instead. Rollback = `git revert` + `make apply-ai` + restore any
+  `.bak`/snapshot the doctor took (the DB state must match the image).
 - npm pin inside `apps/ai/joplin-export/run.sh` (joplin 3.7.1) is manual,
   like K3S_VERSION; bump the joplin CLI in step with the desktop client's
   Joplin version.
 
-### Revert procedure (to Hermes + OpenViking)
+#### Revert procedure (to Hermes + OpenViking) (OC phase, historical)
 
 Everything upstream (Nextcloud, Joplin desktop, app password, secrets
 files) never changed; the state dirs and B2 backups were never touched:

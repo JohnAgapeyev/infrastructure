@@ -1,0 +1,25 @@
+# Letta App Server ingress (web UI + Agent SDK remote backend over the
+# same port; WebSocket streams upgrade through Traefik like any WS app).
+# Auth = LETTA_APP_SERVER_TOKEN on top of the LAN TLS wildcard - same
+# posture as the other web UIs. The 2026-10-20 traefik fix
+# (cluster/traefik/helmchartconfig.yaml, NodePort + hostPorts 80/443)
+# means real client IPs arrive here - no openclaw-style attribution footgun.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: letta
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - letta.home.jg-a.com
+  rules:
+    - host: letta.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: letta
+                port: { number: 4500 }

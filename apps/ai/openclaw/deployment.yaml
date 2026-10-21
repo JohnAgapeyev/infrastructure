@@ -21,7 +21,11 @@ metadata:
   namespace: ai
   labels: { app: openclaw }
 spec:
-  replicas: 1
+  # LET phase: 0 = disabled (revert = 1). Was 1 while active (OC phase).
+  # Manifests, state dir /srv/appdata/openclaw and B2 backups all stay so
+  # the owner can revert the whole decision (docs/PLAN.md LET phase +
+  # operations.md "AI ops" revert runbook).
+  replicas: 0
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: openclaw }

@@ -71,4 +71,21 @@ for db in $(find /srv/appdata/openclaw -name '*.sqlite' -type f 2>/dev/null); do
     rc=1
   fi
 done
+
+# Letta (LET phase): App Server local-backend state (agents, MemFS
+# repositories) under /root/.letta at unpredictable paths - snapshot every
+# *.db + *.sqlite found; the rclone exclude keeps the live ones out of the
+# sync. VERIFY at go-live that the pinned image actually uses SQLite here
+# (if it is plain JSON/files, the snapshots are harmless no-ops and the
+# plain dir sync already covers everything).
+for db in $(find /srv/appdata/letta \( -name '*.db' -o -name '*.sqlite' \) -type f 2>/dev/null); do
+  rel=${db#/srv/appdata/letta/}
+  mkdir -p "$DEST/letta/$(dirname "$rel")"
+  if sqlite3 "$db" ".backup $DEST/letta/$rel"; then
+    echo "snapshot ok: letta/$rel"
+  else
+    echo "snapshot FAILED: letta/$rel" >&2
+    rc=1
+  fi
+done
 exit "$rc"

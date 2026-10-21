@@ -4,6 +4,7 @@ resources:
   - openviking
   - joplin-export
   - hermes
-  # OC phase: openclaw replaces hermes as the ai-ns agent (hermes +
-  # openviking stay above, scaled to 0, for revert).
   - openclaw
+  # LET phase: letta replaces openclaw as the ai-ns agent (hermes +
+  # openviking + openclaw stay above, scaled to 0, for revert).
+  - letta

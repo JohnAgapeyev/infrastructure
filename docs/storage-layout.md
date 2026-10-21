@@ -34,7 +34,8 @@ All app state lives on `/srv` (RAID).
   sync). `/srv/appdata/postgres` - PGDATA for Nextcloud's PostgreSQL
   (999:999, 0700; consistent dumps live in `_snapshots/nextcloud/`, live
   files are excluded from the rclone sync).
-- `/srv/appdata/openclaw` - OpenClaw state (OC phase): `openclaw.json`
+- `/srv/appdata/openclaw` - OpenClaw state (OC phase; **LET phase:
+  disabled** - dir + backups kept for revert): `openclaw.json`
   (gateway/model/memory config - first-run onboard product, never in
   git), per-agent SQLite DBs (`agents/<id>/agent/*.sqlite` - live copies
   excluded from the B2 sync, snapshots in `_snapshots/openclaw/`), and
@@ -42,6 +43,15 @@ All app state lives on `/srv` (RAID).
   source of truth). Owned 1000:1000 (the image's `node` user). The
   Joplin export tree is NOT here - openclaw mounts
   `/srv/appdata/joplin-export` READ-ONLY.
+- `/srv/appdata/letta` - Letta App Server state (LET phase): the local
+  backend (`lc-local-backend/` - agents, MemFS repositories, memory) as
+  written by the image running as ROOT (state lives under `/root/.letta`
+  - upstream deployment repo sets no USER; VERIFY on first boot). Live
+  `*.db`/`*.sqlite` files at unpredictable paths are snapshotted to
+  `_snapshots/letta/` and excluded from the B2 sync. The Joplin export
+  tree is NOT here - letta mounts `/srv/appdata/joplin-export`
+  READ-ONLY at `/mnt/joplin-export` and the agent reads notes via
+  filesystem tools (no indexed search).
 - `/srv/appdata/hermes` - Hermes Agent state (AI phase; **OC phase:
   disabled** - dir + backups kept for revert): config.yaml, .env,
   sessions, memories, skills, state.db): `/opt/data` in the pod, owned by
@@ -93,7 +103,8 @@ All app state lives on `/srv` (RAID).
 | postgres (nextcloud) | 999 | 999 | in-image UID; /srv/appdata/postgres 0700 |
 | hermes | 10000 | 10000 | in-image UID (nousresearch/hermes-agent runtime user; entrypoint chowns /opt/data) |
 | node (joplin-export) | 1000 | 1000 | in-image UID (node:bookworm-slim "node" user); joplin-cli + joplin-export dirs 1000:1000 - collides with host john (1000) by design, owner-inspectable |
-| node (openclaw) | 1000 | 1000 | in-image UID (ghcr.io/openclaw/openclaw "node" user); /srv/appdata/openclaw 1000:1000 - reads joplin-export (same UID) via the read-only mount (OC phase; VERIFY if the image user ever changes) |
+| node (openclaw) | 1000 | 1000 | in-image UID (ghcr.io/openclaw/openclaw "node" user); /srv/appdata/openclaw 1000:1000 - reads joplin-export (same UID) via the read-only mount (OC phase; **LET phase: disabled**, kept for revert) |
+| root (letta) | 0 | 0 | in-image default (ghcr.io/letta-ai/letta-code sets no USER; upstream state dir is /root/.letta); /srv/appdata/letta 0:0 750 - reads joplin-export via the read-only mount (LET phase; VERIFY on first boot) |
 
 Plan's original UIDs 980-982 were taken (systemd users); owner chose auto
 assignment at creation. `/srv/appdata/<app>` dirs are chowned `<user>:media`

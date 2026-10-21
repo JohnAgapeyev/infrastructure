@@ -1,6 +1,6 @@
-# Default-deny + explicit allows for the ai namespace (OC phase: openclaw
-# gateway, joplin-export CronJob; hermes + openviking DISABLED - replicas: 0,
-# kept for revert). Same threat model and style as cloud.yaml: a compromised
+# Default-deny + explicit allows for the ai namespace (LET phase: letta
+# agent gateway, joplin-export CronJob; hermes + openviking + openclaw
+# DISABLED - replicas: 0, kept for revert). Same threat model and style as cloud.yaml: a compromised
 # pod pivoting to other cluster services or the LAN; k3s enforces via its
 # bundled network policy controller.
 #
@@ -8,7 +8,9 @@
 #   egress, all pods:
 #     - DNS            kube-dns (kube-system), UDP/TCP 53
 #     - same-namespace  kept generic (hermes -> openviking while active)
-#   egress, hermes + openviking + joplin-export + openclaw: internet TCP 443
+#   egress, letta + hermes + openviking + joplin-export + openclaw:
+#                      internet TCP 443
+#                      letta: OpenRouter (chat model + embeddings)
 #                      openclaw: OpenRouter (chat model + memory-search
 #                              embeddings) + ClawHub skill/plugin installs
 #                      hermes/openviking: same via OpenRouter (disabled pods,
@@ -39,14 +41,15 @@
 #                      green right after the change.
 #   ingress, all pods:
 #     - same-namespace  kept generic
-#     - kube-system    traefik (openclaw Control UI ingress - ALL client
-#                      traffic arrives via traefik)
+#     - kube-system    traefik (letta + openclaw Control UI ingress - ALL
+#                      client traffic arrives via traefik)
 #     - observability  prometheus (kept for revert: openviking /metrics
 #                      scrape once its ServiceMonitor returns)
 #   NOTE: NO ai pod mounts or addresses /srv/appdata/nextcloud-data, and
 #   none reaches the cloud ns directly - the owner's Joplin notes are read
 #   through the official Joplin CLI over WebDAV (joplin-export) and then
-#   indexed by openclaw from the export tree (read-only mount). Nothing in
+#   read by the agent from the export tree (read-only mount: openclaw
+#   indexed it, letta's agent reads it via filesystem tools). Nothing in
 #   this namespace talks to Nextcloud except joplin-export over HTTPS via
 #   Traefik.
 apiVersion: networking.k8s.io/v1
@@ -101,7 +104,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - { key: app, operator: In, values: [hermes, openviking, joplin-export, openclaw] }
+      - { key: app, operator: In, values: [hermes, openviking, joplin-export, openclaw, letta] }
   policyTypes: [Egress]
   egress:
     - to:

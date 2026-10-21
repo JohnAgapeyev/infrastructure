@@ -113,6 +113,36 @@ verified green). Chart pitfalls: service.spec is allow-listed (no
 (a duplicate is silently dropped). Default chat model:
 openrouter/z-ai/glm-5.3-flash (owner change from glm-5.3).
 
+Progress (2026-10-21, LET phase - Letta App Server; OpenClaw DISABLED):
+LET-0..LET-4 COMMITTED (cluster rollout PENDING owner go-live: ### SUDO
+bootstrap/host/phase-letta0.sh + fill secrets/letta.env + make
+apply-cluster (netpol) / apply-ai - full ordered runbook in
+operations.md "AI ops"). Components (ns `ai`, apps/ai/): letta App
+Server `ghcr.io/letta-ai/letta-code:0.34.19` (first-party image; the
+letta-app-server-deployment repo's own Dockerfile pins the same tag -
+0.34.20 existed only as npm at pin time; port 4500, /readyz probes,
+LETTA_APP_SERVER_TOKEN auth, env-driven - no onboard wizard, state
+/root/.letta -> /srv/appdata/letta, OpenRouter provider, Joplin export
+tree mounted READ-ONLY at /mnt/joplin-export - the agent reads notes via
+filesystem tools, NO indexed search (accepted degradation vs openclaw's
+memory.search.extraPaths; owner decision at planning)). openclaw:
+replicas 0, ingress out of its kustomization - manifests, state dir
+(/srv/appdata/openclaw) and B2 backups ALL KEPT for revert (D10
+lineage; revert runbook in operations.md "AI ops"), same disable
+pattern as hermes/openviking. Netpol: letta added to the
+ai-egress-internet-https app list; openclaw stays listed (revert needs
+no netpol edit). Dependabot: ghcr.io/letta-ai/letta-code added to the
+"ai" group. Backups: letta *.db/*.sqlite snapshotted (generic find -
+local backend paths are unpredictable; VERIFY SQLite at go-live) +
+live copies excluded from the B2 sync (openclaw class). VERIFY-on-
+first-boot items: image runtime UID = root vs the hostPath (C1
+lineage), PORT binds non-loopback so the Service/ingress + /readyz
+probes can reach it (else `server --listen` args per the App Server
+quickstart), /readyz answers from the pod IP (the openclaw /startupz
+loopback-gate lesson), WS streaming through Traefik (the NC-phase
+readTimeout lesson applies to HTTP, WS should upgrade cleanly), memory
+limit 2Gi (openclaw OOM lesson - raise before debugging anything else).
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner
