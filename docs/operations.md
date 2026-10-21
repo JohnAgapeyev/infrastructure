@@ -308,13 +308,18 @@ service account or share exists.
    (OpenVikingDown un-suspends). Netpol needs no edit - hermes/openviking
    never left the allow lists.
 4. First live-run VERIFY items:
-   - C1 env precedence: k8s-injected `API_SERVER_*` must win - check
+   - **C1 VERIFIED (2026-10-21, go-live lesson): hermes's own
+     /opt/data/.env ALREADY carried an API_SERVER_KEY** (seeded by the
+     AI-phase setup), and the s6 entrypoint's .env sourcing WINS over
+     the k8s env - the injected key was rejected
+     (`gateway_auth_failed`). Resolution: `secrets/hermes.env` was
+     ALIGNED to the .env value (both stores agree). Rotation = change
+     /opt/data/.env AND secrets/hermes.env together, or drop the .env
+     line and let k8s env win. Working check:
      `curl -s -H "Authorization: Bearer $(grep -oP
      '(?<=^API_SERVER_KEY=).*' secrets/hermes.env)"
      https://hermes-api.home.jg-a.com/v1/models` lists `hermes-agent`;
-     401 without the key. If it 401s WITH the key, something in
-     `/srv/appdata/hermes/.env` sets `API_SERVER_*` - remove it there
-     (k8s env is the git-declared source).
+     401 without the key.
    - C2 Conduit (Hermes connection): base URL
      `https://hermes-api.home.jg-a.com`, API key = `API_SERVER_KEY` -
      VERIFY whether its field wants the root or the `/v1` suffix (either

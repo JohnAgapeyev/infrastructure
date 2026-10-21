@@ -27,10 +27,16 @@
 # /v1/models, /v1/capabilities, /api/sessions, /v1/runs, /api/jobs,
 # /health - the FULL agent toolset incl. terminal behind the key. Owner
 # decision: token-only posture (no Traefik IP allowlist middleware) -
-# same as every other ingress; the key is 32 random bytes. API_SERVER_*
-# keys are NOT in hermes's own /opt/data/.env - k8s env wins over
-# config.yaml per upstream, and nothing in .env sets API_SERVER_* today
-# (VERIFY at go-live via /v1/models with the injected key).
+# same as every other ingress; the key is 32 random bytes.
+# GO-LIVE LESSON 2026-10-21 (C1 verified): hermes's own /opt/data/.env
+# ALREADY carried an API_SERVER_KEY (seeded by the AI-phase first-run
+# setup), and the s6 entrypoint's .env sourcing WINS over k8s env - the
+# injected value was rejected (gateway_auth_failed). Resolution:
+# secrets/hermes.env is ALIGNED to the .env value (both stores agree, and
+# the docs/Conduit instructions stay truthful). If the key is ever
+# rotated, rotate it in /opt/data/.env AND secrets/hermes.env together
+# (kubectl exec + make apply-ai), or remove the .env line and let the
+# k8s env win from then on.
 # CORS: API_SERVER_CORS_ORIGINS stays unset - only browser callers need
 # it and Conduit is a native app. **
 apiVersion: apps/v1
