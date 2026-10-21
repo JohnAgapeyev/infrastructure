@@ -1,25 +1,38 @@
 # Hermes Agent gateway (Nous Research) - AI-3.
-# ** OC PHASE (2026-10-20): DISABLED (replicas: 0), NOT removed - the agent
-# workload moved to openclaw (apps/ai/openclaw). The manifest, state dir
-# /srv/appdata/hermes and B2 backups all stay so the owner can revert the
-# whole decision (docs/PLAN.md OC phase + plan §6: replicas back to 1,
-# re-enable ingress.yaml in this kustomization, re-add the ov CronJob leg,
-# un-suspend OpenVikingDown, make apply-ai). **
+# ** PHASE HISTORY: OC (2026-10-20) DISABLED replicas: 0 (workload moved to
+# openclaw) -> H2 (2026-10-21) RE-ENABLED per the owner's revert decision
+# (Conduit mobile client needs the gateway): replicas back to 1, ingresses
+# re-added, API server ON (below). The state dir /srv/appdata/hermes and
+# B2 backups were never touched - the pod boots straight onto its old
+# config/sessions/memories, no wizard, no migration (image pin unchanged
+# since the AI phase: v0.22.2). **
 # The image ENTRYPOINT is an s6-overlay dispatcher; `gateway run` passed as
 # args becomes the supervised main service, with the web dashboard
 # supervised alongside it (HERMES_DASHBOARD=1). s6 needs the container to
 # own PID 1 - true for a plain k8s container (no shareProcessNamespace).
 # The gateway runs even with NO messaging platform configured: the
-# dashboard and `hermes chat` inside the container are the front ends
-# (D8: web dashboard only).
+# dashboard and `hermes chat` inside the container are the front ends.
 # All state (config.yaml, .env, sessions, memories, skills, state.db) is
 # /opt/data -> /srv/appdata/hermes. First boot seeds it and the entrypoint
 # chowns it (runtime user UID 10000); first-run setup (model, openviking
-# plugin, memory provider) is interactive kubectl exec - operations.md
+# plugin, memory provider) was interactive kubectl exec - operations.md
 # "AI ops". NEVER run two gateways on one data dir -> replicas: 1 +
 # Recreate.
-# The OpenAI-compatible API server (8642) stays OFF: the dashboard needs
-# only 9119, and every extra listener is attack surface.
+# ** H2: the OpenAI-compatible API server (8642) is ON (D8 amended - the
+# Conduit mobile app talks to it; dashboard-only no longer covers a phone
+# client). Upstream contract (v0.22.2 docs): API_SERVER_ENABLED=true +
+# API_SERVER_KEY (MANDATORY bearer auth, min 8 chars) + API_SERVER_HOST
+# (default 127.0.0.1 -> MUST be 0.0.0.0 for the pod IP, the letta
+# --listen lesson recurring). Serves /v1/chat/completions, /v1/responses,
+# /v1/models, /v1/capabilities, /api/sessions, /v1/runs, /api/jobs,
+# /health - the FULL agent toolset incl. terminal behind the key. Owner
+# decision: token-only posture (no Traefik IP allowlist middleware) -
+# same as every other ingress; the key is 32 random bytes. API_SERVER_*
+# keys are NOT in hermes's own /opt/data/.env - k8s env wins over
+# config.yaml per upstream, and nothing in .env sets API_SERVER_* today
+# (VERIFY at go-live via /v1/models with the injected key).
+# CORS: API_SERVER_CORS_ORIGINS stays unset - only browser callers need
+# it and Conduit is a native app. **
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,8 +40,8 @@ metadata:
   namespace: ai
   labels: { app: hermes }
 spec:
-  # OC phase: 0 = disabled (revert = 1). Was 1 while active.
-  replicas: 0
+  # H2 phase (2026-10-21): re-enabled (was 0 = disabled since OC).
+  replicas: 1
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: hermes }
@@ -48,8 +61,17 @@ spec:
               valueFrom: { secretKeyRef: { name: hermes-dashboard, key: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD } }
             - name: HERMES_DASHBOARD_BASIC_AUTH_SECRET
               valueFrom: { secretKeyRef: { name: hermes-dashboard, key: HERMES_DASHBOARD_BASIC_AUTH_SECRET } }
+            # H2: OpenAI-compatible API server (see header) - key from the
+            # same secretGenerator (secrets/hermes.env).
+            - { name: API_SERVER_ENABLED, value: "true" }
+            - { name: API_SERVER_HOST, value: "0.0.0.0" }
+            - name: API_SERVER_KEY
+              valueFrom: { secretKeyRef: { name: hermes-dashboard, key: API_SERVER_KEY } }
           ports:
             - { name: http, containerPort: 9119 }
+            # API server (upstream default port; API_SERVER_PORT unset =
+            # 8642). Repeated explicitly for the next reader.
+            - { name: api, containerPort: 8642 }
           # tcpSocket (not httpGet): the dashboard answers HTTP but its
           # auth-gate redirects are not a stable probe contract; a
           # listening 9119 is the honest liveness signal for the

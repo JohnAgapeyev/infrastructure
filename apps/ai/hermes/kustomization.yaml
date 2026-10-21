@@ -3,16 +3,21 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
-  # OC phase: ingress.yaml stays in this dir but is NOT applied while the
-  # deployment is disabled (replicas: 0) - an Ingress pointing at a
-  # Service with no endpoints would just 503. Revert = re-add it here.
-  # - ingress.yaml
+  # H2 (2026-10-21): both ingresses re-applied (deployment re-enabled).
+  # ingress.yaml = dashboard (hermes.home.jg-a.com -> 9119);
+  # ingress-api.yaml = API server (hermes-api.home.jg-a.com -> 8642,
+  # Conduit). They were out of this list while disabled (OC/LET phases,
+  # hermes precedent: an Ingress with no endpoints just 503s).
+  - ingress.yaml
+  - ingress-api.yaml
 generatorOptions:
   disableNameSuffixHash: true
 secretGenerator:
   # Dashboard basic auth is MANDATORY on the container's non-loopback bind
-  # (upstream hardening; the loopback/no-auth escape hatch was removed).
-  # The OpenRouter/OpenViking keys are NOT here - they live in Hermes's own
+  # (upstream hardening; the loopback/no-auth escape hatch was removed) +
+  # H2: API_SERVER_KEY, the API server's bearer token (openssl rand -hex
+  # 32, min 8 chars upstream; the Conduit "API key" field). The
+  # OpenRouter/OpenViking keys are NOT here - they live in Hermes's own
   # /opt/data/.env, written during first-run setup.
   - name: hermes-dashboard
     namespace: ai

@@ -3,7 +3,11 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
-  - ingress.yaml
+  # H2 phase (2026-10-21): ingress.yaml stays in this dir but is NOT
+  # applied while the deployment is disabled (replicas: 0) - an Ingress
+  # pointing at a Service with no endpoints would just 503 (hermes
+  # precedent). Revert = re-add it here.
+  # - ingress.yaml
 generatorOptions:
   disableNameSuffixHash: true
 secretGenerator:

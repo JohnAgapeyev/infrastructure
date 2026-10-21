@@ -7,4 +7,7 @@ metadata:
 spec:
   selector: { app: hermes }
   ports:
+    # web dashboard (basic auth, mandatory on non-loopback bind)
     - { name: http, port: 9119, targetPort: 9119 }
+    # H2: OpenAI-compatible API server - Conduit / any OpenAI client
+    - { name: api, port: 8642, targetPort: 8642 }

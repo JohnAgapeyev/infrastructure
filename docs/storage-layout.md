@@ -43,21 +43,24 @@ All app state lives on `/srv` (RAID).
   source of truth). Owned 1000:1000 (the image's `node` user). The
   Joplin export tree is NOT here - openclaw mounts
   `/srv/appdata/joplin-export` READ-ONLY.
-- `/srv/appdata/letta` - Letta App Server state (LET phase): the local
+- `/srv/appdata/letta` - Letta App Server state (LET phase; **H2
+  phase: disabled** - dir + backups kept for revert): the local
   backend (`lc-local-backend/` - agents, MemFS repositories, memory) as
-  written by the image running as ROOT (state lives under `/root/.letta`
-  - upstream deployment repo sets no USER; VERIFY on first boot). Live
+  written by the image running as ROOT (verified at go-live: `id` ->
+  uid=0). Live
   `*.db`/`*.sqlite` files at unpredictable paths are snapshotted to
   `_snapshots/letta/` and excluded from the B2 sync. The Joplin export
   tree is NOT here - letta mounts `/srv/appdata/joplin-export`
   READ-ONLY at `/mnt/joplin-export` and the agent reads notes via
   filesystem tools (no indexed search).
-- `/srv/appdata/hermes` - Hermes Agent state (AI phase; **OC phase:
-  disabled** - dir + backups kept for revert): config.yaml, .env,
-  sessions, memories, skills, state.db): `/opt/data` in the pod, owned by
+- `/srv/appdata/hermes` - Hermes Agent state (AI phase; **H2 phase:
+  re-enabled**): config.yaml, .env (OpenRouter/OpenViking keys),
+  sessions, memories, skills, state.db: `/opt/data` in the pod, owned by
   the image runtime user UID 10000 (entrypoint chowns on first boot).
-- `/srv/appdata/openviking` - OpenViking state (AI phase; **OC phase:
-  disabled** - dir + backups kept for revert): `ov.conf` (root key +
+  H2 adds the API server (8642) - its key is k8s-injected
+  (secrets/hermes.env), NOT in this .env.
+- `/srv/appdata/openviking` - OpenViking state (AI phase; **H2 phase:
+  re-enabled**): `ov.conf` (root key +
   OpenRouter key - first-run wizard product, never in git),
   `ovcli.conf`, and the workspace (`data/` - AGFS files + local vector
   index). Image runs as root; the embedded vector backend holds an
@@ -103,8 +106,8 @@ All app state lives on `/srv` (RAID).
 | postgres (nextcloud) | 999 | 999 | in-image UID; /srv/appdata/postgres 0700 |
 | hermes | 10000 | 10000 | in-image UID (nousresearch/hermes-agent runtime user; entrypoint chowns /opt/data) |
 | node (joplin-export) | 1000 | 1000 | in-image UID (node:bookworm-slim "node" user); joplin-cli + joplin-export dirs 1000:1000 - collides with host john (1000) by design, owner-inspectable |
-| node (openclaw) | 1000 | 1000 | in-image UID (ghcr.io/openclaw/openclaw "node" user); /srv/appdata/openclaw 1000:1000 - reads joplin-export (same UID) via the read-only mount (OC phase; **LET phase: disabled**, kept for revert) |
-| root (letta) | 0 | 0 | in-image default (ghcr.io/letta-ai/letta-code sets no USER; upstream state dir is /root/.letta); /srv/appdata/letta 0:0 750 - reads joplin-export via the read-only mount (LET phase; VERIFY on first boot) |
+| node (openclaw) | 1000 | 1000 | in-image UID (ghcr.io/openclaw/openclaw "node" user); /srv/appdata/openclaw 1000:1000 (OC phase; **H2 phase: disabled**, kept for revert) |
+| root (letta) | 0 | 0 | in-image default (ghcr.io/letta-ai/letta-code sets no USER; verified uid=0 at LET go-live); /srv/appdata/letta 0:0 750 (LET phase; **H2 phase: disabled**, kept for revert) |
 
 Plan's original UIDs 980-982 were taken (systemd users); owner chose auto
 assignment at creation. `/srv/appdata/<app>` dirs are chowned `<user>:media`

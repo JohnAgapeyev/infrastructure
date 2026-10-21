@@ -218,10 +218,11 @@ HA/matter together).
 | Alertmanager | https://alertmanager.home.jg-a.com | |
 | Home Assistant | https://ha.home.jg-a.com | http://nas:8123 |
 | Nextcloud | https://nextcloud.home.jg-a.com | |
-| Hermes (AI, LET phase: disabled) | ~~https://hermes.home.jg-a.com~~ | |
-| OpenViking (AI, LET phase: disabled) | ~~https://openviking.home.jg-a.com~~ (Web Studio at `/studio`) | |
-| OpenClaw (AI, LET phase: disabled) | ~~https://openclaw.home.jg-a.com~~ (Control UI; gateway-token auth) | |
-| Letta (AI) | https://letta.home.jg-a.com (App Server; LETTA_APP_SERVER_TOKEN auth) | |
+| Hermes (AI) | https://hermes.home.jg-a.com (dashboard, basic auth) | |
+| Hermes API (AI, H2: Conduit) | https://hermes-api.home.jg-a.com (OpenAI-compatible API server; API_SERVER_KEY bearer) | |
+| OpenViking (AI) | https://openviking.home.jg-a.com (Web Studio at `/studio`) | |
+| OpenClaw (AI, H2 phase: disabled) | ~~https://openclaw.home.jg-a.com~~ (Control UI; gateway-token auth) | |
+| Letta (AI, H2 phase: disabled) | ~~https://letta.home.jg-a.com~~ (App Server; LETTA_APP_SERVER_TOKEN auth) | |
 
 All web UIs require login (qBittorrent: LAN 10.0.0.0/24 bypass + creds for
 apps; Radarr/Sonarr/Prowlarr/Bazarr/Shoko/Seerr/Grafana: forms). Nextcloud:
@@ -267,7 +268,108 @@ generator, manual, out of scope here). `./scripts/nc-occ.sh` wraps occ.
   Backups section + [disaster-recovery.md](disaster-recovery.md)).
 
 
-## AI ops (Letta + joplin-export; LET phase - OpenClaw/Hermes/OpenViking disabled)
+## AI ops (Hermes + OpenViking + joplin-export; H2 phase - OpenClaw/Letta disabled)
+
+Design + decisions: `docs/PLAN.md` H2 phase (2026-10-21) - this is the
+revert the OC phase was built to allow, plus one new requirement: the
+owner wants **Conduit** (mobile app) against the gateway, so the Hermes
+**API server** is enabled (D8 amended - dashboard-only no longer covers a
+phone client). Namespace `ai` (`apps/ai/`): **hermes** (gateway +
+dashboard :9119 basic-auth + OpenAI-compatible API server :8642 -
+`API_SERVER_ENABLED/HOST/KEY` envs, bearer auth, full agent toolset incl.
+terminal behind the key; ingresses `hermes.home.jg-a.com` (dashboard) +
+`hermes-api.home.jg-a.com` (API - Conduit points here); state
+`/opt/data` -> `/srv/appdata/hermes` untouched since the AI phase,
+image pin unchanged v0.22.2 - straight boot, no wizard), **openviking**
+(memory/knowledge store, OpenRouter embeddings; ServiceMonitor +
+OpenVikingDown un-suspended; state untouched, entrypoint self-starts on
+ov.conf), **joplin-export** (CronJob */5 with the `ov add-resource` upsert
+leg RESTORED - precise revert of OC-2/0f98098: `@openviking/cli@0.4.23`,
+ovcli Secret mount, `ov language`, upsert into
+`viking://resources/joplin`), **openclaw + letta DISABLED**
+(`replicas: 0`, ingresses out of their kustomizations,
+manifests/state/backups kept for revert - the hermes pattern, third
+generation). Nothing reads the Nextcloud Joplin sync directory; no NC
+service account or share exists.
+
+### Go-live order (H2 phase - repo work is done; these are the owner steps)
+
+1. Fill secrets: `API_SERVER_KEY` is already generated in
+   `secrets/hermes.env` (`openssl rand -hex 32`) - rotate it if you want
+   a value you picked yourself. `secrets/ovcli.conf` was never removed
+   from disk (VERIFY: `ls secrets/ovcli.conf`).
+2. Sanity-check the untouched state (sudo): `ls /srv/appdata/hermes`
+   (config.yaml, .env, state.db, sessions/), `ls /srv/appdata/openviking`
+   (ov.conf, data/) - everything should be exactly as the OC phase left
+   it; neither wizard runs again.
+3. Apply: `make apply-ai` **and** the alert rules (lighter than the full
+   observability target):
+   `kubectl kustomize --load-restrictor=LoadRestrictionsNone apps/observability/rules | kubectl apply -f -`
+   (OpenVikingDown un-suspends). Netpol needs no edit - hermes/openviking
+   never left the allow lists.
+4. First live-run VERIFY items:
+   - C1 env precedence: k8s-injected `API_SERVER_*` must win - check
+     `curl -s -H "Authorization: Bearer $(grep -oP
+     '(?<=^API_SERVER_KEY=).*' secrets/hermes.env)"
+     https://hermes-api.home.jg-a.com/v1/models` lists `hermes-agent`;
+     401 without the key. If it 401s WITH the key, something in
+     `/srv/appdata/hermes/.env` sets `API_SERVER_*` - remove it there
+     (k8s env is the git-declared source).
+   - C2 Conduit (Hermes connection): base URL
+     `https://hermes-api.home.jg-a.com`, API key = `API_SERVER_KEY` -
+     VERIFY whether its field wants the root or the `/v1` suffix (either
+     maps to the same server); a chat turn streams; a tool call asks for
+     approval on the phone.
+   - C3 SSE streaming through Traefik: upstream sends 10s keepalives
+     (built for 20s proxy idle deadlines) - if a stream dies at exactly
+     60s, it's the NC-phase readTimeout lesson; check
+     `cluster/traefik/helmchartconfig.yaml`.
+   - C4 the memory gap: notes added between OC and H2 were never upserted
+     into OpenViking (openclaw indexed them into its own SQLite instead).
+     The first joplin-export run after this restore backfills them.
+     VERIFY the first run fits the 300s job deadline (the AI-phase first
+     sync overran and needed the one-off bootstrap pod
+     `apps/ai/joplin-export/bootstrap-pod.yaml` - same trick if the
+     backfill upsert overruns):
+     `kubectl -n ai create job --from=cronjob/joplin-export joplin-export-manual`
+     then check the pod logs for the `ov add-resource` output.
+   - C5 memory recall end-to-end: `hermes memory status` (kubectl exec)
+     -> openviking available; ask via Conduit about something only a
+     Joplin note knows; `viking_search` finds a note in the Studio.
+5. End-to-end checks:
+   - `kubectl -n ai get deploy` -> hermes 1/1, openviking 1/1, letta
+     0/0, openclaw 0/0; no OpenVikingDown firing (Prometheus target up
+     again - `kubectl -n observability logs deploy/observability-kube-prometheus-prometheus` or the UI).
+   - Dashboard: https://hermes.home.jg-a.com loads, basic-auth login,
+     old sessions/memories visible.
+   - API: `curl -s https://hermes-api.home.jg-a.com/health` -> ok
+     (unauthenticated by upstream design); `/v1/models` 401 without /
+     200 with the key.
+   - Conduit: chat turn streams, tool approval arrives, scheduled work
+     lists (it only shows capabilities the server reports).
+   - Joplin: edit a note on the desktop -> ~5-15 min later the export job
+     upserts it and Hermes answers a question only that note answers
+     (desktop sync + CronJob + upsert).
+
+### Revert procedure (to Letta)
+
+The OC phase's disable-not-delete pattern, third generation - state
+dirs, secrets files, B2 backups, netpol entries and Dependabot pins were
+never touched:
+
+1. `apps/ai/letta`: `replicas: 1` (was 0), re-add `- ingress.yaml` to its
+   kustomization.
+2. hermes + openviking: `replicas: 0`, take `ingress.yaml` (+ hermes
+   `ingress-api.yaml`, openviking `servicemonitor.yaml`) out of their
+   kustomizations; re-comment the `ai` rule group in
+   `apps/observability/rules/prometheusrule.yaml`; drop the ov leg from
+   joplin-export again (git history: OC-2 0f98098 shows exactly what to
+   remove).
+3. `make apply-ai` + apply the rules kustomize (step 3 above).
+4. `/srv/appdata/{hermes,openviking,letta,openclaw}` keep their state
+   either way; each phase's runbook lives in this file's history.
+
+### LET phase (historical - Letta go-live + revert runbooks)
 
 Design + decisions: `docs/PLAN.md` LET phase (2026-10-21). Namespace `ai`
 (`apps/ai/`): **letta** (App Server `ghcr.io/letta-ai/letta-code:0.34.19` -
@@ -284,7 +386,7 @@ established the pattern and operations.md git history holds its runbooks).
 Nothing reads the Nextcloud Joplin sync directory; no NC service account or
 share exists.
 
-### Go-live order (LET phase - repo work is done; these are the owner steps)
+#### Go-live order (LET phase - was the owner steps)
 
 1. `sudo bash bootstrap/host/phase-letta0.sh` - creates `/srv/appdata/letta`
    (owned 0:0; the upstream image runs as root - VERIFY on first boot).
@@ -335,7 +437,7 @@ share exists.
      `Sec-Websocket-Accept` through Traefik with the bearer token, `401`
      on bad/missing token (fails closed), `/readyz` 200 via the ingress.
 
-### Revert procedure (to OpenClaw)
+#### Revert procedure (to OpenClaw) (LET phase, historical)
 
 Everything upstream (Nextcloud, Joplin desktop, app password, secrets
 files) never changed; the state dirs and B2 backups were never touched
@@ -495,12 +597,14 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
 
 ### Updates
 
-- Dependabot "ai" group (letta + the disabled-but-listed
-  openclaw/openviking/hermes images) -> merge PR -> `make apply-ai`
-  (Recreate restarts pods). letta releases are frequent npm/container
-  tags (`0.x.y`); if Dependabot PR volume is annoying, add ignore rules.
-  VERIFY after the first image bump that the state format still matches
-  the snapshot loop (see LET go-live VERIFY items).
+- Dependabot "ai" group (hermes + openviking active again in H2; letta +
+  openclaw disabled-but-listed for the revert paths) -> merge PR ->
+  `make apply-ai` (Recreate restarts pods). hermes/openviking bumps now
+  matter again: hermes state must match the image (hermes runs its own
+  state migrations on start - keep pre-upgrade snapshots; openviking's
+  vector index rebuilds via `ov reindex` if corrupt). letta releases
+  were frequent npm/container tags (`0.x.y`); if PR volume for the
+  disabled pair gets annoying, add ignore rules instead of delisting.
 - openclaw (OC phase, historical): the image entrypoint runs
   `openclaw doctor --fix` on start: agent DB schema migrations happen
   under maintenance ownership with pre-migration `.bak` copies kept in
@@ -510,11 +614,11 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
   state) - do NOT delete lock files; see the upstream health/docs flow
   instead. Rollback = `git revert` + `make apply-ai` + restore any
   `.bak`/snapshot the doctor took (the DB state must match the image).
-- npm pin inside `apps/ai/joplin-export/run.sh` (joplin 3.7.1) is manual,
-  like K3S_VERSION; bump the joplin CLI in step with the desktop client's
-  Joplin version.
+- npm pins inside `apps/ai/joplin-export/run.sh` (joplin 3.7.1,
+  @openviking/cli 0.4.23 - H2 restore) are manual, like K3S_VERSION;
+  bump the joplin CLI in step with the desktop client's Joplin version.
 
-#### Revert procedure (to Hermes + OpenViking) (OC phase, historical)
+#### Revert procedure (to Hermes + OpenViking) (OC phase, historical - EXECUTED 2026-10-21 as the H2 phase, see above)
 
 Everything upstream (Nextcloud, Joplin desktop, app password, secrets
 files) never changed; the state dirs and B2 backups were never touched:

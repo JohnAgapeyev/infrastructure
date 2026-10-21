@@ -149,6 +149,36 @@ chat turn via OpenRouter + an agent reading a note from
 /mnt/joplin-export (needs an agent created - Agent SDK remote backend,
 https://letta.home.jg-a.com).
 
+Progress (2026-10-21, H2 phase - REVERT to Hermes + OpenViking; Letta
+DISABLED; Hermes API server ON for Conduit): H2-0..H2-5 COMMITTED
+(rollout executed: make apply-ai + rules kustomize). This is the revert
+the OC phase was built to allow (D10), plus one amendment: the owner
+wants the Conduit mobile app (cogwheel0/conduit - GPL Flutter client
+with a native "Hermes" connection mode) against the gateway, so Hermes's
+OpenAI-compatible API server (8642) is enabled (D8 amended):
+API_SERVER_ENABLED=true + API_SERVER_KEY (MANDATORY bearer auth,
+openssl rand -hex 32, in secrets/hermes.env via the hermes-dashboard
+generator) + API_SERVER_HOST=0.0.0.0 (default 127.0.0.1 - the letta
+--listen lesson recurring). New ingress hermes-api.home.jg-a.com ->
+ai/hermes:8642 (owner decision: dedicated host, not path routing - the
+API server has /v1 + /api + /health prefixes; token-only posture, no
+Traefik IP middleware). hermes + openviking RE-ENABLED (replicas 1,
+ingresses + servicemonitor re-applied, OpenVikingDown un-suspended) -
+state dirs untouched, pins unchanged (v0.22.2/v0.5.0), straight boots,
+no wizards. joplin-export: ov upsert leg RESTORED (precise revert of
+OC-2 0f98098: @openviking/cli@0.4.23, ovcli.conf Secret mount,
+ov language, ov add-resource --to viking://resources/joplin) - notes
+added during OC/LET were only ever in openclaw's index, the first
+restored run backfills OpenViking (VERIFY 300s deadline; bootstrap-pod
+trick if it overruns - C4). letta DISABLED the hermes way (replicas 0,
+ingress out of its kustomization, state/backups/netpol/Dependabot kept).
+VERIFY-at-go-live: k8s API_SERVER_* envs beat hermes's own
+/opt/data/.env (C1), Conduit base-URL field semantics (C2), SSE through
+Traefik (10s upstream keepalives; NC readTimeout lesson, C3), the ov
+backfill upsert deadline (C4), end-to-end memory recall via Conduit
+(C5). Netpol/Dependabot: no edits needed - every app stays listed
+(disabled-but-kept precedent).
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

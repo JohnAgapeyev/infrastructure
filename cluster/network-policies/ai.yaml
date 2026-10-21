@@ -1,6 +1,7 @@
-# Default-deny + explicit allows for the ai namespace (LET phase: letta
-# agent gateway, joplin-export CronJob; hermes + openviking + openclaw
-# DISABLED - replicas: 0, kept for revert). Same threat model and style as cloud.yaml: a compromised
+# Default-deny + explicit allows for the ai namespace (H2 phase: hermes
+# gateway + API server (Conduit), openviking memory store, joplin-export
+# CronJob; openclaw + letta DISABLED - replicas: 0, kept for revert). Same
+# threat model and style as cloud.yaml: a compromised
 # pod pivoting to other cluster services or the LAN; k3s enforces via its
 # bundled network policy controller.
 #
@@ -10,14 +11,14 @@
 #     - same-namespace  kept generic (hermes -> openviking while active)
 #   egress, letta + hermes + openviking + joplin-export + openclaw:
 #                      internet TCP 443
-#                      letta: OpenRouter (chat model + embeddings)
-#                      openclaw: OpenRouter (chat model + memory-search
-#                              embeddings) + ClawHub skill/plugin installs
-#                      hermes/openviking: same via OpenRouter (disabled pods,
-#                              kept in the list so the revert needs no netpol
-#                              edit)
-#                      joplin-export: registry.npmjs.org (pinned joplin
-#                              install each run)
+#                      hermes/openviking: OpenRouter (chat + embeddings;
+#                              re-enabled in H2) + hermes tool web fetches
+#                      letta: OpenRouter (disabled pod, kept in the list
+#                              so the revert needs no netpol edit)
+#                      openclaw: OpenRouter + ClawHub installs (same)
+#                      joplin-export: registry.npmjs.org (pinned joplin +
+#                              @openviking/cli install each run - H2
+#                              restore)
 #                      Private ranges excluded so a compromised pod cannot
 #                      pivot to the pod/service CIDRs, LAN, or the API server.
 #   egress, joplin-export only: Nextcloud WebDAV via Traefik, allowed to
@@ -41,8 +42,10 @@
 #                      green right after the change.
 #   ingress, all pods:
 #     - same-namespace  kept generic
-#     - kube-system    traefik (letta + openclaw Control UI ingress - ALL
-#                      client traffic arrives via traefik)
+#     - kube-system    traefik (hermes dashboard + API (Conduit),
+#                      openviking studio, + the disabled-but-kept letta/
+#                      openclaw ingresses - ALL client traffic arrives
+#                      via traefik)
 #     - observability  prometheus (kept for revert: openviking /metrics
 #                      scrape once its ServiceMonitor returns)
 #   NOTE: NO ai pod mounts or addresses /srv/appdata/nextcloud-data, and

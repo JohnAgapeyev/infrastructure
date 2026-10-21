@@ -10,8 +10,8 @@ updates:
       home: { patterns: ["ghcr.io/home-assistant/*", "ghcr.io/matter-js/*", "busybox"] }
       # NC stack (apps/cloud): all bumps in one PR
       cloud: { patterns: ["nextcloud", "postgres", "redis"] }
-      # AI stack (apps/ai): all bumps in one PR. openviking/hermes/openclaw
-      # stay listed while disabled (revert path - see docs/PLAN.md LET phase).
+      # AI stack (apps/ai): all bumps in one PR. openclaw/letta stay listed
+      # while disabled (revert path - see docs/PLAN.md H2 phase).
       ai: { patterns: ["ghcr.io/volcengine/openviking", "nousresearch/hermes-agent", "ghcr.io/openclaw/openclaw", "ghcr.io/letta-ai/letta-code"] }
     ignore:
       - dependency-name: "jellyfin/jellyfin"

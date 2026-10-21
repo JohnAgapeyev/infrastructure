@@ -40,7 +40,13 @@ metadata:
   namespace: ai
   labels: { app: letta }
 spec:
-  replicas: 1
+  # H2 phase (2026-10-21): 0 = disabled (revert = 1). Was 1 while active
+  # (LET phase). The owner reverted the whole agent decision to
+  # Hermes + OpenViking (Conduit mobile client - see docs/PLAN.md H2
+  # phase). Manifest, state dir /srv/appdata/letta and B2 backups all
+  # stay so the owner can re-enable or fully revert this too
+  # (operations.md "AI ops" - Revert procedure (to Letta)).
+  replicas: 0
   strategy: { type: Recreate }
   selector:
     matchLabels: { app: letta }

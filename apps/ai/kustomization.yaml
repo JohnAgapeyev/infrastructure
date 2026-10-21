@@ -5,6 +5,7 @@ resources:
   - joplin-export
   - hermes
   - openclaw
-  # LET phase: letta replaces openclaw as the ai-ns agent (hermes +
-  # openviking + openclaw stay above, scaled to 0, for revert).
+  # H2 phase (2026-10-21): hermes + openviking RE-ENABLED as the ai-ns
+  # agent + memory (Conduit mobile client - see docs/PLAN.md H2 phase);
+  # openclaw + letta stay above, scaled to 0, for revert.
   - letta

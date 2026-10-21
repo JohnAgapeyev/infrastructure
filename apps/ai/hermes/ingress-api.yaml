@@ -1,0 +1,33 @@
+# H2 (2026-10-21): dedicated ingress host for the OpenAI-compatible API
+# server (8642) - the Conduit mobile app's "Hermes" connection points at
+# this base URL. Separate host instead of path routing on the dashboard
+# host (owner decision): the API server has several route prefixes (/v1,
+# /api, /health) and a second host avoids any dashboard-route collision +
+# rolls back independently. The wildcard cert + Unbound wildcard cover it
+# (no DNS step).
+# Auth = the API server's own bearer token (API_SERVER_KEY) - token-only
+# posture per owner decision, no Traefik IP allowlist (same as every other
+# ingress). The endpoint carries the FULL agent toolset incl. terminal:
+# the key is the only gate, 32 random bytes, never in git.
+# Conduit connection: base URL https://hermes-api.home.jg-a.com,
+# API key = API_SERVER_KEY. /health is unauthenticated by upstream design
+# (that is the readiness signal), /v1/* 401s without the key.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hermes-api
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - hermes-api.home.jg-a.com
+  rules:
+    - host: hermes-api.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hermes
+                port: { number: 8642 }
