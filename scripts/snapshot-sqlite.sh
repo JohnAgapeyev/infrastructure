@@ -3,6 +3,15 @@
 # /srv/appdata/_scripts/snapshot-sqlite.sh and run as ExecStartPre by
 # rclone-backup.service (root). Skips missing DBs gracefully.
 #
+# 2026-10-21 lesson: grafana/grafana.db hit "database is locked" at
+# 00:00:29 -> rc=1 -> the ExecStartPre failure aborted the WHOLE
+# rclone-backup unit (zero B2 upload that night) - one short writer
+# lock must not kill the nightly. Every .backup now runs under a 15s
+# busy_timeout (.timeout) so brief locks WAIT instead of failing; a
+# persistent lock still fails loudly (rc=1: uploading a snapshot set
+# with holes while the live copies are rclone-excluded would be worse
+# than no upload).
+#
 # Radarr/Sonarr/Prowlarr are NOT listed: they write their own weekly zips to
 # <app>/Backups/. qBittorrent BT_backup is many small files, safe to copy
 # live. Prometheus TSDB is disposable by decision.
@@ -30,7 +39,7 @@ for name in "${!DBS[@]}"; do
   db=${DBS[$name]}
   if [ -f "$db" ]; then
     mkdir -p "$DEST/$(dirname "$name")"
-    if sqlite3 "$db" ".backup $DEST/$name"; then
+    if sqlite3 "$db" ".timeout 15000" ".backup $DEST/$name"; then
       echo "snapshot ok: $name"
     else
       echo "snapshot FAILED: $name" >&2
@@ -47,7 +56,7 @@ done
 for db in $(find /srv/appdata/openviking -name '*.db' -type f 2>/dev/null); do
   rel=${db#/srv/appdata/openviking/}
   mkdir -p "$DEST/openviking/$(dirname "$rel")"
-  if sqlite3 "$db" ".backup $DEST/openviking/$rel"; then
+  if sqlite3 "$db" ".timeout 15000" ".backup $DEST/openviking/$rel"; then
     echo "snapshot ok: openviking/$rel"
   else
     echo "snapshot FAILED: openviking/$rel" >&2
@@ -64,7 +73,7 @@ done
 for db in $(find /srv/appdata/openclaw -name '*.sqlite' -type f 2>/dev/null); do
   rel=${db#/srv/appdata/openclaw/}
   mkdir -p "$DEST/openclaw/$(dirname "$rel")"
-  if sqlite3 "$db" ".backup $DEST/openclaw/$rel"; then
+  if sqlite3 "$db" ".timeout 15000" ".backup $DEST/openclaw/$rel"; then
     echo "snapshot ok: openclaw/$rel"
   else
     echo "snapshot FAILED: openclaw/$rel" >&2
@@ -81,7 +90,7 @@ done
 for db in $(find /srv/appdata/letta \( -name '*.db' -o -name '*.sqlite' \) -type f 2>/dev/null); do
   rel=${db#/srv/appdata/letta/}
   mkdir -p "$DEST/letta/$(dirname "$rel")"
-  if sqlite3 "$db" ".backup $DEST/letta/$rel"; then
+  if sqlite3 "$db" ".timeout 15000" ".backup $DEST/letta/$rel"; then
     echo "snapshot ok: letta/$rel"
   else
     echo "snapshot FAILED: letta/$rel" >&2
