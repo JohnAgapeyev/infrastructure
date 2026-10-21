@@ -345,6 +345,23 @@ service account or share exists.
    - `kubectl -n ai get deploy` -> hermes 1/1, openviking 1/1, letta
      0/0, openclaw 0/0; no OpenVikingDown firing (Prometheus target up
      again - `kubectl -n observability logs deploy/observability-kube-prometheus-prometheus` or the UI).
+   - **GO-LIVE LESSON (2026-10-21, minutes after the H2 apply):
+     OpenVikingDown + TargetDown fired because the openviking
+     /metrics endpoint was DISABLED all along** - the scrape target
+     existed but answered 404 "Prometheus metrics are disabled." and
+     `up{job="openviking"}` had NEVER been 1 (9-day history, all three
+     pod instances: the AI-phase ServiceMonitor was a dead scrape from
+     day one; OC/LET masked it - rule commented out, replicas 0). The
+     server ships metrics OFF by default. Fix (applied same day): add
+     `"observability": { "metrics": { "enabled": true } }` to the
+     `server` object of /srv/appdata/openviking/ov.conf (edit in-pod as
+     root - the file is root-only on the host and never in git; member
+     lines need their trailing commas) + `kubectl -n ai rollout
+     restart deploy/openviking`; validated with the server's own
+     loader (`openviking.server.config.load_server_config`). If
+     /metrics ever 404s again, check that ov.conf key FIRST - the
+     pods/health side is a red herring (the app was healthy the
+     whole time).
    - Dashboard: https://hermes.home.jg-a.com loads, basic-auth login,
      old sessions/memories visible.
    - API: `curl -s https://hermes-api.home.jg-a.com/health` -> ok

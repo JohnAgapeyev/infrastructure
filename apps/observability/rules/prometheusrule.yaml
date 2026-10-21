@@ -151,4 +151,4 @@ spec:
             severity: warning
           annotations:
             summary: "OpenViking scrape is down (10m)"
-            description: "Prometheus cannot scrape openviking /metrics. Check `kubectl -n ai get pods`, https://openviking.home.jg-a.com/health and `kubectl -n ai logs deploy/openviking`."
+            description: "Prometheus cannot scrape openviking /metrics. Check `kubectl -n ai get pods`, https://openviking.home.jg-a.com/health and `kubectl -n ai logs deploy/openviking`; if the app is healthy but /metrics 404s, metrics are disabled in ov.conf (server.observability.metrics.enabled - 2026-10-21 H2 lesson)."

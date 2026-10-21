@@ -6,6 +6,11 @@
 # /srv/appdata/openviking (ov.conf + workspace) and B2 backups were never
 # touched; the image entrypoint watches for ov.conf and starts the server
 # by itself - straight boot, no wizard (pin unchanged: v0.5.0). **
+# /metrics REQUIRES server.observability.metrics.enabled=true in ov.conf
+# (shipped false - 2026-10-21 H2 go-live lesson: the AI-phase ServiceMonitor
+# scraped a 404 from day one and OpenVikingDown fired the moment the ai
+# rule group came back; the fix lives in ov.conf on the hostPath, not
+# in git).
 # Single instance BY DESIGN: the embedded local vector backend holds an
 # exclusive OS file lock on its workspace (`.openviking.lock`) -> replicas: 1
 # + Recreate, and NOTHING else may open /srv/appdata/openviking (the
