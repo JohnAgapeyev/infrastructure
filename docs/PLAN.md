@@ -179,6 +179,56 @@ backfill upsert deadline (C4), end-to-end memory recall via Conduit
 (C5). Netpol/Dependabot: no edits needed - every app stays listed
 (disabled-but-kept precedent).
 
+Progress (2026-10-26, LC phase - LibreChat front-end for Hermes):
+LC-0..LC-3 COMMITTED (cluster rollout PENDING owner go-live: ###
+SUDO bootstrap/host/phase-lc0.sh + fill secrets/librechat.env (see
+librechat.env.example: HERMES_API_KEY MUST equal the API_SERVER_KEY
+value from /srv/appdata/hermes/.env) + re-copy scripts/snapshot-mongo.sh
+to /srv/appdata/_scripts/ + re-copy the rclone drop-in + make
+apply-cluster (no-op netpol comment edit) / apply-ai + register the
+admin then flip ALLOW_REGISTRATION=false + make apply-ai - full
+ordered runbook in operations.md "AI ops" / "Backups"). Components
+(ns ai, apps/ai/librechat/): librechat `ghcr.io/librechat-ai/librechat:
+v0.8.8` (FIRST-PARTY org GHCR, version-tagged - the stale
+danny-avila GHCR path and the :latest-only registry.librechat.ai were
+rejected by the pin policy) + no-auth mongo `mongo:8.0.20` (upstream
+compose shape: mongod --noauth, UID 1000:1000, state /srv/appdata/
+librechat-mongo EXCLUDED from the rclone sync - the nightly mongodump
+in _snapshots/librechat/ is the DB restore source, snapshot-postgres
+class). ONE custom endpoint (configmap librechat.yaml, config version
+1.3.17 = the v0.8.8 schema): name "Hermes", baseURL
+http://hermes:8642/v1 over the IN-CLUSTER Service (D18 - same-ns
+egress is generic, so ZERO netpol allow edits; the public
+hermes-api URL would have needed a joplin-style DNAT allow),
+apiKey ${HERMES_API_KEY} interpolated from the Secret SERVER-SIDE
+(D21: value = API_SERVER_KEY, aligned with /opt/data/.env per the
+H2/C1 lesson), models.fetch: true against hermes /v1/models. Egress
+posture (D22): librechat is DELIBERATELY NOT in
+ai-egress-internet-https - all model traffic is in-cluster to
+hermes; a compromised librechat pod reaches nothing outside the ns.
+Ingress librechat.home.jg-a.com -> 3080 (D24, no middleware -
+LibreChat's own JWT login is the gate). Registration (D23):
+ALLOW_REGISTRATION=true for first boot, then false in
+secrets/librechat.env. Backups: images/ + uploads/ sync plainly
+(file restore source); the mongodump pre-step is the DB restore
+source (rehearsal leg: mongorestore --archive --drop). Meilisearch
+/RAG: skipped - not needed to chat with Hermes. Upstream
+librechat-admin-panel container: out of scope, add later if wanted.
+GO-LIVE 2026-10-26: VERIFIED hermes /v1/models reports exactly ONE id
+(hermes-agent - pinned into models.default/titleModel), pods 1/1,
+/health OK via Traefik, registration locked + admin re-created via
+upstream `npm run create-user` (first user = ADMIN). GO-LIVE LESSONS
+(full detail in operations.md "LC phase"): L1 JWT_REFRESH_SECRET must
+be set BEFORE first boot (blank = silent /app/.env.temp bootstrap
+creds + their fingerprint in the ONE-WAY librechatCredentialMetadata
+DB marker; late fix = drop the young DB + restart + re-create admin -
+applied, marker clean), L2 SCHEDULES_SINGLE_PROCESS=true required for
+the schedules engine to arm (single replica + Recreate, no Redis), L3
+stale-JWT "no user found" warns after a DB reset are expected until
+re-login. REMAINING VERIFY: streamed chat turn through Traefik (SSE -
+C3), tool/terminal turn, memory recall via OpenViking, the backup
+unit run + mongodump restore rehearsal, node RAM headroom.
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

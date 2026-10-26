@@ -1,0 +1,40 @@
+# librechat.yaml - LibreChat's main config, mounted at
+# /app/custom/librechat.yaml (CONFIG_PATH in the Deployment). ONE
+# custom endpoint: the Hermes agent gateway's OpenAI-compatible API
+# server, over the in-cluster Service (D18).
+# `version` pins the CONFIG SCHEMA (not the app): v0.8.8 ships Config
+# 1.3.17 per its release notes - bump only with a LibreChat release
+# note that says so.
+# apiKey: interpolated from the librechat-env Secret at load time
+# (${HERMES_API_KEY} - server-side only, never reaches the browser).
+# models.fetch: true -> the model list is fetched from Hermes
+# /v1/models at startup. VERIFY at go-live (LC-4): if the pinned
+# hermes v0.22.2 /v1/models answer upsets LibreChat's parser, replace
+# fetch with an explicit default list.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: librechat-config
+  namespace: ai
+data:
+  librechat.yaml: |
+    version: 1.3.17
+    cache: true
+    endpoints:
+      custom:
+        - name: "Hermes"
+          apiKey: "${HERMES_API_KEY}"
+          # in-cluster Service (D18): same-ns egress, no netpol change,
+          # no internet round-trip. Do NOT use the public
+          # hermes-api.home.jg-a.com URL here.
+          baseURL: "http://hermes:8642/v1"
+          models:
+            # VERIFIED 2026-10-26 (LC go-live): hermes v0.22.2 /v1/models
+            # reports exactly ONE model id - "hermes-agent" (the gateway
+            # resolves models internally; there is no model list to
+            # enumerate). default + fetch both carry the real id.
+            default: ["hermes-agent"]
+            fetch: true
+          titleConvo: true
+          titleModel: "hermes-agent"
+          modelDisplayLabel: "Hermes"

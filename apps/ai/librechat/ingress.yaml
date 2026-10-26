@@ -1,0 +1,30 @@
+# LibreChat UI ingress (LC-1, D24): librechat.home.jg-a.com -> 3080.
+# Auth = LibreChat's own login (JWT session, mongo-backed users) - no
+# extra Traefik middleware, same posture as the other auth'd web UIs
+# (grafana, hermes dashboard is the basic-auth variant). The wildcard
+# cert + Unbound wildcard cover the hostname (no DNS/cert step).
+# SSE streaming already proven through this Traefik (H2/C3: Conduit
+# keepalives; NC readTimeout lesson lives in the chart config).
+# Registration (D23): ALLOW_REGISTRATION=true for first boot, flip to
+# false in secrets/librechat.env after the admin account exists
+# (make apply-ai restarts the pod) - registration envs are read at
+# request time by upstream, but restart keeps the stores honest.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: librechat
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - librechat.home.jg-a.com
+  rules:
+    - host: librechat.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: librechat
+                port: { number: 3080 }

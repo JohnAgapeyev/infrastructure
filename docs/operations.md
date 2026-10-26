@@ -136,8 +136,10 @@ HA/matter together).
 - `rclone-backup.timer` runs daily (drop-in adds the appdata sync):
   `/srv/appdata` -> B2 `John-System-Backups/appdata` (rclone `sync`), after
   `snapshot-sqlite.sh` takes consistent SQLite snapshots into
-  `/srv/appdata/_snapshots/` and `snapshot-postgres.sh` dumps Nextcloud's
-  PostgreSQL into `_snapshots/nextcloud/nextcloud.sql.gz` (both then synced).
+  `/srv/appdata/_snapshots/`, `snapshot-postgres.sh` dumps Nextcloud's
+  PostgreSQL into `_snapshots/nextcloud/nextcloud.sql.gz` and
+  `snapshot-mongo.sh` dumps LibreChat's MongoDB into
+  `_snapshots/librechat/librechat-mongo.archive.gz` (all then synced).
 - Exclusions (see the drop-in for the authoritative list): prometheus,
   jellyfin-cache, logs, wal/shm, the LIVE snapshotted DBs (grafana, shoko,
   jellyfin, seerr, bazarr, home-assistant, hermes state.db, joplin-cli
@@ -145,7 +147,9 @@ HA/matter together).
   weekly zips in `<app>/Backups/` are the restore source - sonarr
   mid-import-waves tore its live DB reads and hard-failed the sync,
   2026-10-13),
-  `postgres/**` (the pg_dump is the restore source), the Shokofin VFS
+  `postgres/**` (the pg_dump is the restore source), `librechat-mongo/**`
+  (LC phase: the mongodump in `_snapshots/librechat/` is the restore
+  source; LibreChat's `images/` + `uploads/` sync plainly), the Shokofin VFS
   symlink tree, nextcloud churn (nextcloud.log, uploads/, appdata_*), and
   `joplin-export/**` (AI phase: regenerable on the next */5 job run;
   the openviking vector index is likewise rebuildable via `ov reindex`;
@@ -390,6 +394,107 @@ never touched:
 3. `make apply-ai` + apply the rules kustomize (step 3 above).
 4. `/srv/appdata/{hermes,openviking,letta,openclaw}` keep their state
    either way; each phase's runbook lives in this file's history.
+
+### LC phase (LibreChat web front-end for Hermes) - 2026-10-26
+
+Design + decisions: `docs/PLAN.md` LC phase (D18-D24). Namespace `ai`
+(`apps/ai/librechat/`): **librechat** (`ghcr.io/librechat-ai/librechat:v0.8.8`
+- FIRST-PARTY org GHCR, version-tagged; the stale `danny-avila` GHCR path and
+the `:latest`-only `registry.librechat.ai` were rejected by the pin policy) +
+**no-auth mongo** (`mongo:8.0.20`, upstream compose shape, behind the
+default-deny). ONE custom endpoint in `librechat.yaml` (ConfigMap
+`librechat-config`, config schema `version: 1.3.17`): "Hermes", baseURL
+`http://hermes:8642/v1` **over the in-cluster Service** (D18 - so NO netpol
+allow edits; egress = DNS + same-ns only, D22: librechat is deliberately NOT
+in `ai-egress-internet-https` - all model traffic goes in-cluster to hermes),
+apiKey `${HERMES_API_KEY}` interpolated from the Secret, server-side only.
+Ingress `librechat.home.jg-a.com` -> 3080, no middleware (D24 - LibreChat's
+own JWT login is the gate). Meilisearch/RAG skipped (not needed to chat);
+upstream's `librechat-admin-panel` container out of scope, add later if
+wanted.
+
+#### Go-live order (LC phase - the owner steps)
+
+1. `sudo bash bootstrap/host/phase-lc0.sh` - creates
+   `/srv/appdata/librechat/{images,uploads}` +
+   `/srv/appdata/librechat-mongo`, all owned 1000:1000 (both images run as
+   an explicit UID:GID per upstream compose).
+2. Fill `secrets/librechat.env` (generation commands in
+   `secrets/librechat.env.example`). **`HERMES_API_KEY` MUST equal
+   `API_SERVER_KEY`** - copy the value that lives in
+   `/srv/appdata/hermes/.env` (`kubectl -n ai exec deploy/hermes -- grep
+   '^API_SERVER_KEY' /opt/data/.env`) - the H2/C1 lesson: that store wins
+   over the k8s env, so the two were ALIGNED. Rotate both together or not
+   at all. `ALLOW_REGISTRATION=true` for first boot (D23).
+3. `sudo cp bootstrap/host/rclone-backup-dropin.conf
+   /etc/systemd/system/rclone-backup.service.d/override.conf` (new
+   exclude: `librechat-mongo/**`, new ExecStartPre) **and** `sudo cp
+   scripts/snapshot-mongo.sh /srv/appdata/_scripts/snapshot-mongo.sh` +
+   `sudo chmod +x` - neither host file updates itself.
+4. `make apply-cluster` (netpol header comment only - no allow changes) +
+   `make apply-ai`.
+5. First run: register the admin at https://librechat.home.jg-a.com,
+   then flip `ALLOW_REGISTRATION=false` in `secrets/librechat.env` +
+   `make apply-ai`.
+6. VERIFY items - **VERIFIED 2026-10-26 (go-live), see lessons below**:
+   - model list from Hermes `/v1/models`: **hermes v0.22.2 reports exactly
+     ONE id, `hermes-agent`** (the gateway resolves models internally) -
+     `models.default` + `titleModel` in `configmap.yaml` are pinned to it;
+     `models.fetch: true` rides along fine.
+   - a streamed chat turn end-to-end (SSE through Traefik - if it dies at
+     exactly 60s, the NC readTimeout lesson applies);
+   - a tool/terminal turn asks for approval / runs (full agent toolset
+     behind the gateway key) and memory recall via OpenViking answers;
+   - backup leg: `sudo systemctl start rclone-backup.service` ->
+     `snapshot ok: _snapshots/librechat/librechat-mongo.archive.gz`;
+     DR rehearsal leg: `kubectl -n ai exec -i deploy/librechat-mongo --
+     mongorestore --archive --drop < librechat-mongo.archive.gz`;
+   - node RAM headroom (`kubectl top nodes` - the two pods add ~2 GiB
+     of limits onto the 31 GiB node).
+
+#### GO-LIVE LESSONS (LC phase, 2026-10-26)
+
+- **L1 - `JWT_REFRESH_SECRET` must be set BEFORE first boot.** The env
+  example shipped without it; a blank value makes LibreChat silently use
+  `/app/.env.temp` (process-local bootstrap creds) AND write that
+  fingerprint into the one-way `librechatCredentialMetadata` marker.
+  Upstream docs: "Changing an established key does not re-encrypt
+  existing records... do not overwrite that marker instead of performing
+  a controlled migration." If a real secret arrives after first boot,
+  every restart logs `[credentials] Active fingerprints for
+  JWT_REFRESH_SECRET do not match` forever. **Fix applied (DB was 25 min
+  old, 1 user, 0 chats): drop the DB (`mongosh --eval
+  'db.getSiblingDB("LibreChat").dropDatabase()'`) + rollout restart ->
+  "New database detected. Credential fingerprints were recorded" (clean
+  marker under the permanent creds) + re-create the admin via
+  `kubectl -n ai exec -it deploy/librechat -- npm run create-user`
+  (interactive password prompt; first user in a fresh DB = ADMIN role;
+  registration stays locked).** Both secrets now live in
+  `secrets/librechat.env` from boot. Debug trail: the marker is a doc
+  `_id: 'primary'` in the `LibreChat` DB, `fingerprints` per key.
+- **L2 - the schedules engine refuses to arm without proof of
+  single-replica** ("this process cannot see other replicas'
+  generations" -> scheduled-chats writes 503). Fix:
+  `SCHEDULES_SINGLE_PROCESS=true` in the Deployment env - honest for
+  `replicas: 1` + Recreate. Scale past 1 only with Redis
+  (`USE_REDIS_STREAMS`).
+- **L3 - expected noise after a DB reset:** stale browser JWTs log
+  `[jwtLogin] JwtStrategy => no user found` warns until re-login;
+  `METRICS_SECRET is not set` and the unreachable RAG API warn on every
+  boot (metrics off = /metrics 401; RAG skipped by design - no
+  Meilisearch in this deployment).
+
+#### Revert procedure (drop LibreChat)
+
+The disable-not-delete pattern, fourth generation:
+
+1. `apps/ai/librechat/kustomization.yaml` + `apps/ai/kustomization.yaml`:
+   drop the `librechat` entries; `replicas: 0` is unnecessary - removing
+   the app from the kustomization deletes the Deployments/Services/
+   Ingress; state dirs `/srv/appdata/{librechat,librechat-mongo}`,
+   `secrets/librechat.env`, the snapshot script + drop-in lines and the
+   Dependabot pattern all STAY.
+2. `make apply-ai`; re-add `librechat` to the kustomizations to restore.
 
 ### LET phase (historical - Letta go-live + revert runbooks)
 

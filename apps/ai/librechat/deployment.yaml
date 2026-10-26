@@ -1,0 +1,109 @@
+# LibreChat web front-end for the Hermes agent (LC-1).
+# Points ONE custom endpoint at Hermes's OpenAI-compatible API server
+# (apps/ai/hermes, :8642) over the IN-CLUSTER Service (D18):
+# http://hermes:8642/v1 - same-ns egress is already allowed generically
+# (ai-egress-same-namespace) and DNS is allowed, so the netpol needed NO
+# new allows. The public hermes-api.home.jg-a.com route would have needed
+# a joplin-export-style DNAT allow (80/443/8080/8443 -> kube-system) for
+# zero added benefit (owner decision, see docs/PLAN.md LC phase).
+# API key handling (D21): the endpoint's apiKey is interpolated by
+# LibreChat from ${HERMES_API_KEY} (secrets/librechat.env via the
+# librechat-env secretGenerator) and stays SERVER-SIDE - never shipped to
+# the browser. The VALUE must equal Hermes's API_SERVER_KEY (the key that
+# also lives in /srv/appdata/hermes/.env - H2/C1 lesson: hermes's own
+# .env wins over k8s env, so the two stores were ALIGNED; copy that
+# value, and rotate BOTH together if ever).
+# Egress posture (D22): DNS + same-ns ONLY - librechat is deliberately
+# NOT in the ai-egress-internet-https app list; every model call goes
+# in-cluster to Hermes, so a compromised librechat pod can reach nothing
+# outside the namespace (Hermes itself does the OpenRouter egress).
+# State: chats/users live in MongoDB (apps/ai/librechat/mongo-deployment,
+# D19 - single instance, no auth, protected by the ai-ns default-deny,
+# cloud-ns redis precedent; mongod --noauth is upstream's own compose
+# shape). Only images/ + uploads/ ride a hostPath - the mongo dump
+# (scripts/snapshot-mongo.sh) is the DB restore source, postgres class.
+# Upstream image: ghcr.io/librechat-ai/librechat (the LibreChat-AI org;
+# NOT the stale danny-avila GHCR path, NOT registry.librechat.ai which
+# only serves :latest tags - pinned-tag policy, Dependabot-tracked).
+# Upstream compose runs it as an arbitrary UID:GID -> 1000:1000 here
+# (phase-lc0.sh pre-creates + chowns the state dirs), UMASK irrelevant
+# (no group-shared writes).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: librechat
+  namespace: ai
+  labels: { app: librechat }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: librechat }
+  template:
+    metadata:
+      labels: { app: librechat }
+    spec:
+      # node image's "node" user == the phase-lc0.sh owner of
+      # /srv/appdata/librechat (joplin-export precedent)
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: librechat
+          image: ghcr.io/librechat-ai/librechat:v0.8.8
+          env:
+            # non-loopback bind is required for the Service/Traefik to
+            # reach it (letta --listen lesson, recurring)
+            - { name: HOST, value: "0.0.0.0" }
+            - { name: PORT, value: "3080" }
+            # the ConfigMap below (CONFIG_PATH default is
+            # /app/custom/librechat.yaml - repeated for the next reader)
+            - { name: CONFIG_PATH, value: /app/custom/librechat.yaml }
+            # 2026-10-26 go-live lesson: without this the schedules
+            # engine refuses to arm ("this process cannot see other
+            # replicas' generations" - it cannot PROVE single-replica)
+            # and scheduled-chats writes 503. This deployment IS exactly
+            # one replica (Recreate, above), so the assertion is honest.
+            # Scale past 1 only with Redis (USE_REDIS_STREAMS).
+            - { name: SCHEDULES_SINGLE_PROCESS, value: "true" }
+          envFrom:
+            # SESSION_SECRET, JWT_SECRET, JWT_REFRESH_SECRET,
+            # CREDS_KEY/CREDS_IV, MONGO_URI, HERMES_API_KEY,
+            # ALLOW_REGISTRATION (secrets/librechat.env.example documents
+            # them)
+            - secretRef: { name: librechat-env }
+          ports:
+            - { name: http, containerPort: 3080 }
+          # v0.8.6+ serves a real /health endpoint (explicit readiness
+          # endpoints were a v0.8.6 release note) - plain httpGet is the
+          # honest contract here, unlike hermes's 9119 tcpSocket.
+          startupProbe:
+            httpGet: { path: /health, port: 3080 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /health, port: 3080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 3080 }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: config, mountPath: /app/custom, readOnly: true }
+            # user-uploaded avatars/message images - worth keeping across
+            # pod recreation (the browser-visible file tree)
+            - { name: images, mountPath: /app/client/public/images }
+            # in-flight/edited attachment source files
+            - { name: uploads, mountPath: /app/uploads }
+          # NOTE: logs stay on stdout (kubectl logs) - the upstream
+          # ./logs bind mount is not needed; /app/data (temp
+          # credentials) is ephemeral by design.
+      volumes:
+        - name: config
+          configMap: { name: librechat-config }
+        - name: images
+          hostPath: { path: /srv/appdata/librechat/images, type: Directory }
+        - name: uploads
+          hostPath: { path: /srv/appdata/librechat/uploads, type: Directory }

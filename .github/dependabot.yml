@@ -12,7 +12,7 @@ updates:
       cloud: { patterns: ["nextcloud", "postgres", "redis"] }
       # AI stack (apps/ai): all bumps in one PR. openclaw/letta stay listed
       # while disabled (revert path - see docs/PLAN.md H2 phase).
-      ai: { patterns: ["ghcr.io/volcengine/openviking", "nousresearch/hermes-agent", "ghcr.io/openclaw/openclaw", "ghcr.io/letta-ai/letta-code"] }
+      ai: { patterns: ["ghcr.io/volcengine/openviking", "nousresearch/hermes-agent", "ghcr.io/openclaw/openclaw", "ghcr.io/letta-ai/letta-code", "ghcr.io/librechat-ai/librechat", "mongo"] }
     ignore:
       - dependency-name: "jellyfin/jellyfin"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]

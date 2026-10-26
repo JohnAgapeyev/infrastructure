@@ -9,3 +9,6 @@ resources:
   # agent + memory (Conduit mobile client - see docs/PLAN.md H2 phase);
   # openclaw + letta stay above, scaled to 0, for revert.
   - letta
+  # LC phase (2026-10-26): librechat web front-end for the hermes gateway
+  # (incl. its no-auth mongo) - see docs/PLAN.md LC phase.
+  - librechat

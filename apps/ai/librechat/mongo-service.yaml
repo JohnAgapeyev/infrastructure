@@ -1,0 +1,13 @@
+# MongoDB Service for LibreChat (LC-1). MONGO_URI in
+# secrets/librechat.env points at it:
+# mongodb://librechat-mongo:27017/LibreChat
+apiVersion: v1
+kind: Service
+metadata:
+  name: librechat-mongo
+  namespace: ai
+  labels: { app: librechat-mongo }
+spec:
+  selector: { app: librechat-mongo }
+  ports:
+    - { name: mongo, port: 27017, targetPort: 27017 }

@@ -1,0 +1,59 @@
+# MongoDB for LibreChat (LC-1, D19) - chats/users/messages store.
+# Single in-cluster instance, NO AUTH (upstream's own compose shape:
+# `mongod --noauth`): the ai-ns default-deny NetworkPolicy is the gate -
+# only same-ns pods, traefik (unneeded) and observability can reach it,
+# and nothing in the namespace talks to 27017 except librechat
+# (cloud-ns redis precedent, same reasoning).
+# Runs as the phase-lc0.sh host UID 1000:1000 (upstream compose passes
+# ${UID}:${GID}; mongo refuses root-owned data dirs anyway).
+# State: /srv/appdata/librechat-mongo -> /data/db (WiredTiger files are
+# torn-prone mid-write -> the LIVE tree is EXCLUDED from the rclone sync;
+# the consistent mongodump in _snapshots/librechat/ is the restore
+# source, exactly the postgres/snapshot-postgres.sh class).
+# replicas: 1 + Recreate - a second mongod on one data dir would corrupt
+# it (single-writer class, like openviking's workspace lock).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: librechat-mongo
+  namespace: ai
+  labels: { app: librechat-mongo }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: librechat-mongo }
+  template:
+    metadata:
+      labels: { app: librechat-mongo }
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: mongo
+          # upstream compose pin (docker-compose.yml): mongo 8.0 line
+          image: mongo:8.0.20
+          args: ["--noauth"]
+          ports:
+            - { name: mongo, containerPort: 27017 }
+          # tcpSocket (not httpGet): a listening 27017 is the honest
+          # liveness signal for a bare mongod (hermes 9119 precedent)
+          startupProbe:
+            tcpSocket: { port: 27017 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket: { port: 27017 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 27017 }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /data/db }
+      volumes:
+        - name: data
+          hostPath: { path: /srv/appdata/librechat-mongo, type: Directory }

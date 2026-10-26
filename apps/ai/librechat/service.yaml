@@ -1,0 +1,14 @@
+# LibreChat backend Service (LC-1). Port 3080 = upstream default
+# (docker-compose PORT); the pod sets the same value explicitly.
+apiVersion: v1
+kind: Service
+metadata:
+  # labelled: ServiceMonitors select SERVICES by their labels (jellyfin
+  # lesson) - none here yet, but the convention costs nothing
+  name: librechat
+  namespace: ai
+  labels: { app: librechat }
+spec:
+  selector: { app: librechat }
+  ports:
+    - { name: http, port: 3080, targetPort: 3080 }

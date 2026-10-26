@@ -47,7 +47,12 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   edit), ingress from traefik + observability; no ai pod mounts or
   reads `/srv/appdata/nextcloud-data` (the owner's Joplin notes are
   reached only through the official Joplin CLI over WebDAV, then
-  upserted into OpenViking by the joplin-export job).
+  upserted into OpenViking by the joplin-export job). The LC phase
+  (2026-10-26) added librechat (web UI + its no-auth mongo) with NO new
+  netpol allows: its egress is DNS + same-ns only (librechat ->
+  hermes:8642 + -> librechat-mongo:27017 both ride the generic
+  same-ns egress), deliberately excluded from the internet-443 allow -
+  all model traffic goes in-cluster to hermes.
 
 ## Services
 
@@ -68,6 +73,7 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
 | hermes | AI agent gateway + web dashboard + OpenAI-compatible API server :8642 for Conduit (AI phase; **H2 phase: re-enabled**, D8 amended) | `nousresearch/hermes-agent:v0.22.2` in `apps/ai/hermes` |
 | openclaw | AI agent gateway + Control UI + builtin memory (OC phase; **H2 phase: disabled** - replicas 0, kept for revert) | `ghcr.io/openclaw/openclaw:2026.10.5` in `apps/ai/openclaw` |
 | letta | Letta App Server: stateful agents + Agent SDK remote backend (LET phase; **H2 phase: disabled** - replicas 0, kept for revert) | `ghcr.io/letta-ai/letta-code:0.34.19` in `apps/ai/letta` |
+| librechat | web front-end for the Hermes agent gateway, via its OpenAI-compatible API :8642 over the in-cluster Service (LC phase) + no-auth mongo behind the default-deny | `ghcr.io/librechat-ai/librechat:v0.8.8` + `mongo:8.0.20` in `apps/ai/librechat` |
 | joplin-export | official Joplin CLI sync client -> clean md export tree -> OpenViking upsert (CronJob, */5; ov leg restored in H2) | `node:24.22.0-bookworm-slim` + `joplin@3.7.1` + `@openviking/cli@0.4.23` in `apps/ai/joplin-export` |
 | kube-prometheus-stack | metrics/alerts/dashboards | umbrella chart in `apps/observability/` |
 | cert-manager | TLS issuance (LE wildcard via Cloudflare DNS-01) | `v1.21.2` pinned, `scripts/install-cert-manager.sh` |

@@ -1,14 +1,24 @@
 # Default-deny + explicit allows for the ai namespace (H2 phase: hermes
 # gateway + API server (Conduit), openviking memory store, joplin-export
-# CronJob; openclaw + letta DISABLED - replicas: 0, kept for revert). Same
-# threat model and style as cloud.yaml: a compromised
+# CronJob; openclaw + letta DISABLED - replicas: 0, kept for revert.
+# LC phase 2026-10-26: librechat (web UI + its no-auth mongo) ADDED -
+# NO new allows were needed: librechat->hermes rides the generic
+# same-namespace egress, librechat->librechat-mongo ditto, DNS ditto;
+# librechat is DELIBERATELY NOT in the internet-443 list below (every
+# model call goes in-cluster to hermes, so a compromised librechat pod
+# reaches nothing outside the namespace - D22). Same threat model and style as cloud.yaml: a compromised
 # pod pivoting to other cluster services or the LAN; k3s enforces via its
 # bundled network policy controller.
 #
 # Flow inventory this encodes:
 #   egress, all pods:
 #     - DNS            kube-dns (kube-system), UDP/TCP 53
-#     - same-namespace  kept generic (hermes -> openviking while active)
+#     - same-namespace  kept generic (hermes -> openviking while active;
+#                      LC: librechat -> hermes + librechat -> librechat-
+#                      mongo both ride it - D18/D19)
+#   egress, librechat (LC phase 2026-10-26): NOTHING beyond the above -
+#                      deliberately absent from the internet allow below
+#                      (D22); all model traffic is in-cluster to hermes.
 #   egress, letta + hermes + openviking + joplin-export + openclaw:
 #                      internet TCP 443
 #                      hermes/openviking: OpenRouter (chat + embeddings;
@@ -43,9 +53,9 @@
 #   ingress, all pods:
 #     - same-namespace  kept generic
 #     - kube-system    traefik (hermes dashboard + API (Conduit),
-#                      openviking studio, + the disabled-but-kept letta/
-#                      openclaw ingresses - ALL client traffic arrives
-#                      via traefik)
+#                      openviking studio, librechat UI, + the
+#                      disabled-but-kept letta/openclaw ingresses - ALL
+#                      client traffic arrives via traefik)
 #     - observability  prometheus (kept for revert: openviking /metrics
 #                      scrape once its ServiceMonitor returns)
 #   NOTE: NO ai pod mounts or addresses /srv/appdata/nextcloud-data, and
