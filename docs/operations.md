@@ -876,6 +876,22 @@ files) never changed; the state dirs and B2 backups were never touched:
   before the first output line. Limit is now 2Gi and the npm output is
   never silenced (empty logs made the failure point indistinguishable,
   2026-10-18).
+- joplin-export npm registry flakiness (2026-10-26, H2): a transient
+  registry.npmjs.org tarball 404 (`bowser-2.15.0.tgz`) failed BOTH pods
+  of a job (backoffLimit 1) and paged KubeJobFailed - while the pinned
+  CLIs were already installed and fine. The per-run
+  `npm install -g` was pure registry-fragility surface: with exact
+  version pins + a persistent prefix, run.sh now SKIPS npm install
+  entirely in steady state (checks package.json version of
+  joplin + @openviking/cli in $NPM_PREFIX) and only hits the registry on
+  first run / version bump (--prefer-offline + one retry). Corollary:
+  the generic KubeJobFailed pages on ANY single failed tick, including
+  self-healed transients - JoplinExportFailingStreak
+  (apps/observability/rules/prometheusrule.yaml) is the real signal: >=2
+  failed Job objects in the 24h ttl window means the */5 schedule is NOT
+  self-healing. Half-written npm tree after an OOM-killed install (npm
+  writes package.json before unpacking): rm -rf
+  /srv/appdata/joplin-cli/npm and the next run reinstalls.
 - k3s netpol + Traefik paths (AI phase, 2026-10-18 - THE big one): an
   egress allow for traffic dialed to `*.home.jg-a.com` must include
   Traefik's CONTAINER ports - the k3s traefik chart maps svc 443 ->

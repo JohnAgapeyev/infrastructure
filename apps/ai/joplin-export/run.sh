@@ -40,11 +40,35 @@ OV_CLI_VERSION="0.4.23"
 # 0. clean any stale temp export from an interrupted previous run
 rm -rf /work/state/.export.* || true
 
-# 1. install pinned CLIs into the persistent npm prefix (repeat runs hit
-#    the cache; ~30s cold, near-instant warm). Output NOT silenced:
+# 1. install pinned CLIs into the persistent npm prefix - ONLY when the
+#    pinned versions are not already installed there. Steady-state runs
+#    must NOT depend on registry.npmjs.org: 2026-10-26 lesson, a transient
+#    registry tarball 404 (bowser-2.15.0.tgz) failed BOTH pods of a job
+#    (backoffLimit 1) and paged KubeJobFailed while the CLI was already
+#    installed and fine - with a */5 schedule + pinned versions, a
+#    per-run reinstall only buys registry flakiness. Output NOT silenced:
 #    2026-10-18 lesson - an OOM here leaves completely empty job logs.
-npm install -g --prefix "$NPM_PREFIX" --no-audit --no-fund \
-  "joplin@${JOPLIN_CLI_VERSION}" "@openviking/cli@${OV_CLI_VERSION}"
+installed_version() {
+  [ -f "$NPM_PREFIX/lib/node_modules/$1/package.json" ] \
+    && node -p "require('$NPM_PREFIX/lib/node_modules/$1/package.json').version" 2>/dev/null || true
+}
+if [ "$(installed_version joplin)" = "$JOPLIN_CLI_VERSION" ] \
+  && [ "$(installed_version @openviking/cli)" = "$OV_CLI_VERSION" ]; then
+  # CAVEAT: npm writes package.json before unpacking the tree, so a
+  # half-written (OOM-killed) install can still pass this check. If a
+  # skip-installed CLI misbehaves: rm -rf /srv/appdata/joplin-cli/npm
+  # (host path) and the next run reinstalls from scratch.
+  echo "joplin-export: pinned CLIs already installed (joplin@${JOPLIN_CLI_VERSION}, @openviking/cli@${OV_CLI_VERSION}) - skipping npm install"
+else
+  # First run or version bump: hit the registry, but prefer the persistent
+  # cache (--prefer-offline: no staleness revalidation - versions are
+  # exact-pinned, so cache-vs-registry drift is moot) and retry once -
+  # a single transient 404/EAGAIN must not burn the run's backoff budget.
+  npm install -g --prefix "$NPM_PREFIX" --no-audit --no-fund --prefer-offline \
+    "joplin@${JOPLIN_CLI_VERSION}" "@openviking/cli@${OV_CLI_VERSION}" \
+    || npm install -g --prefix "$NPM_PREFIX" --no-audit --no-fund --prefer-offline \
+      "joplin@${JOPLIN_CLI_VERSION}" "@openviking/cli@${OV_CLI_VERSION}"
+fi
 
 # 1b. some npm tarballs ship JS bin entry points WITHOUT the exec bit
 #     (seen 2026-10-18: @openviking/cli bin/ov.mjs 644 -> "Permission

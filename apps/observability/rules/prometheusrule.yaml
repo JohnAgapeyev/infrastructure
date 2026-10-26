@@ -152,3 +152,20 @@ spec:
           annotations:
             summary: "OpenViking scrape is down (10m)"
             description: "Prometheus cannot scrape openviking /metrics. Check `kubectl -n ai get pods`, https://openviking.home.jg-a.com/health and `kubectl -n ai logs deploy/openviking`; if the app is healthy but /metrics 404s, metrics are disabled in ov.conf (server.observability.metrics.enabled - 2026-10-21 H2 lesson)."
+        - alert: JoplinExportFailingStreak
+          # 2026-10-26 lesson: a single failed joplin-export tick is
+          # TRANSIENT (that day: a registry.npmjs tarball 404 during the
+          # per-run npm install) - the */5 schedule self-heals on the next
+          # tick, but the chart's generic KubeJobFailed pages on it
+          # anyway. This rule pages only when runs STOP succeeding: two
+          # or more failed Job objects inside the 24h
+          # ttlSecondsAfterFinished window = a systematic break (bad
+          # creds, dead WebDAV target, broken CLI). A one-off blip that
+          # the next tick repairs never reaches this.
+          expr: count(kube_job_status_failed{namespace="ai", job_name=~"joplin-export-.*"} > 0) >= 2
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "joplin-export has multiple failed runs in 24h"
+            description: "At least two joplin-export Job objects failed within the ttl window ({{ $value }} failed jobs) - the */5 schedule is not self-healing. Check `kubectl -n ai get jobs | grep joplin-export`, the latest pod's logs and the run.sh lessons in docs/operations.md (WebDAV creds, netpol, npm 404)."
