@@ -668,6 +668,18 @@ all. Existing messages are not retro-threaded - only new ones.
   newer-doc keys needed, E2EE off). The sync loop retries every 5s on
   errors and self-heals through homeserver restarts (observed twice,
   both tuwunel restarts of this go-live).
+- **L5 - `kubectl exec` stdin appends REQUIRE `-i` - and a verification
+  must never be masked by a fallback.** The 2026-10-28 DM-threading
+  append ran `kubectl exec` WITHOUT `-i`: the heredoc never reached
+  `cat`, nothing was appended, and the follow-up
+  `grep MATRIX_DM_AUTO_THREAD ... || echo "(only DM_AUTO_THREAD set)"`
+  printed a MISLEADING success message (grep's exit-1 = no match was
+  swallowed by the fallback) - the setting silently never applied and
+  the owner correctly reported "no auto-threading" from both Element
+  Web and Element X. Rule: append with `exec -i` (exactly like runbook
+  step 6), and verifications must POSITIVELY print the expected line -
+  grep exit codes are the contract, `|| echo` fallbacks are for
+  ABSENCES you expect, not for values you just wrote.
 
 #### First live-run VERIFY items (MX phase)
 

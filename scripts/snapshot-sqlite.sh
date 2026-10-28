@@ -49,11 +49,16 @@ for name in "${!DBS[@]}"; do
 done
 
 # OpenViking (AI phase): its SQLite files sit at unpredictable paths in
-# the workspace (queuefs/usage-audit/...) - snapshot every *.db found and
-# let the rclone exclude keep the live ones out of the sync (vector index
-# *.db files are excluded with them; a corrupt index rebuilds via
-# `ov reindex` - the source files under the workspace are what matter).
-for db in $(find /srv/appdata/openviking -name '*.db' -type f 2>/dev/null); do
+# the workspace (queuefs/usage-audit/...) - snapshot every *.db AND
+# *.sqlite3 found and let the rclone exclude keep the live ones out of
+# the sync (vector index *.db files are excluded with them; a corrupt
+# index rebuilds via `ov reindex` - the source files under the
+# workspace are what matter). 2026-10-28 lesson (MX-go-live backup run):
+# the usage-audit DB is usage_audit.sqlite3 - a .sqlite3, NOT .db, so
+# it was neither snapshotted nor excluded; its live -wal/-shm sidecars
+# tore mid-write and failed the first sync attempt with "Checksum did
+# not match data received".
+for db in $(find /srv/appdata/openviking \( -name '*.db' -o -name '*.sqlite3' \) -type f 2>/dev/null); do
   rel=${db#/srv/appdata/openviking/}
   mkdir -p "$DEST/openviking/$(dirname "$rel")"
   if sqlite3 "$db" ".timeout 15000" ".backup $DEST/openviking/$rel"; then
