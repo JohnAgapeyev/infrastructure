@@ -33,9 +33,18 @@ spec:
       # one retry, not the default 6: the */5 schedule already retries
       # constantly, and a failed job object lingers a day (KubeJobFailed)
       backoffLimit: 1
-      # hard bound: npm install + sync + export + upsert must fit; a run
-      # that overruns is killed (leaving the desktop's .lock alone)
-      activeDeadlineSeconds: 300
+      # hard bound: sync + export + upsert must fit (npm install only runs
+      # on first run / version bump since the 2026-10-26 fix); a run that
+      # overruns is killed (leaving the desktop's .lock alone). 600s, not
+      # the original 300s (2026-10-27 lesson): the nightly rclone backup
+      # (00:00 PDT -> ~01:00) and daytime torrent IO storms push a
+      # normally-10s run to 2+ minutes (node_modules reads + sqlite +
+      # Nextcloud WebDAV all sit on the saturated array; observed joplin
+      # startup 0.8s -> 55s) and 300s turned one backup-window tick into a
+      # DeadlineExceeded job failure. Forbid already prevents overlap, so
+      # an overrunning slot just SKIPS the next one - a slow-but-completing
+      # run costs one skipped tick, not a failed job + 24h of KubeJobFailed.
+      activeDeadlineSeconds: 600
       template:
         metadata:
           labels: { app: joplin-export }

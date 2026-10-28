@@ -131,6 +131,15 @@ kube-prometheus-stack:
     #   NodeSystemSaturation - load > 2x cores for 15m: same.
     #   NodeMemoryMajorPagesFaults - > 500 major faults/s during IO
     #     storms on this media box: same.
+    #   KubeJobFailed on joplin-export-* (2026-10-27 spam pass): the
+    #     */5 CronJob self-heals - a single failed tick (npm 404,
+    #     backup-storm deadline overrun) is recovered by the next slot,
+    #     but the failed Job object lingers 24h (ttlSecondsAfterFinished)
+    #     so the generic chart alert pages all day about an already-fixed
+    #     tick. Real joplin-export breakage is carried by
+    #     JoplinExportFailingStreak (rules/prometheusrule.yaml): >=2
+    #     failed jobs in the ttl window = NOT self-healing. KubeJobFailed
+    #     for every other job (qbit-manage etc.) still pages.
     # RAID (NodeRAIDDegraded/NodeRAIDDiskFailure), SMART and mdadm
     # alerts are NOT matched here - they keep paging.
     config:
@@ -144,6 +153,10 @@ kube-prometheus-stack:
             receiver: "null"
           - matchers:
               - alertname =~ "NodeFilesystem(AlmostOutOfSpace|SpaceFillingUp|FilesAlmostOutOfFiles|FilesFillingUp)|NodeDiskIOSaturation|NodeSystemSaturation|NodeMemoryMajorPagesFaults"
+            receiver: "null"
+          - matchers:
+              - alertname = "KubeJobFailed"
+              - job_name =~ "joplin-export-.*"
             receiver: "null"
           - matchers:
               - severity="critical"

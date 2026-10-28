@@ -336,7 +336,7 @@ service account or share exists.
    - C4 the memory gap: notes added between OC and H2 were never upserted
      into OpenViking (openclaw indexed them into its own SQLite instead).
      The first joplin-export run after this restore backfills them.
-     VERIFY the first run fits the 300s job deadline (the AI-phase first
+     VERIFY the first run fits the 600s job deadline (the AI-phase first
      sync overran and needed the one-off bootstrap pod
      `apps/ai/joplin-export/bootstrap-pod.yaml` - same trick if the
      backfill upsert overruns):
@@ -657,7 +657,7 @@ Nextcloud Joplin sync directory; no NC service account or share exists.
 - VERIFIED 2026-10-18 (joplin CLI, unchanged): one-shot commands are
   non-interactive by default (NO `--non-interactive` flag exists); sync
   target 6 = WebDAV; the FIRST `joplin sync` downloads the whole vault and
-  can exceed the 300s job deadline (bootstrap once with
+  can exceed the 600s job deadline (bootstrap once with
   `apps/ai/joplin-export/bootstrap-pod.yaml`).
 - `openclaw onboard --non-interactive ...` flag surface on the pinned
   version (C2) - interactive `kubectl exec` onboard is the fallback and is
@@ -810,7 +810,7 @@ files) never changed; the state dirs and B2 backups were never touched:
 - Memory: `openclaw memory status --deep` (index + embedding provider),
   `openclaw memory index --force` (rebuild), `openclaw memory search
   "query"` (test retrieval from the CLI).
-- Sync-lock contention with the desktop client: the job is Forbid + 300s
+- Sync-lock contention with the desktop client: the job is Forbid + 600s
   deadline; if runs start dying on the .lock, widen the schedule.
 - The openclaw pod has NO kubeconfig, NO NC mounts, NO docker socket - if a
   task seems to need them, that is by design (D6); agent sandboxing is
@@ -892,6 +892,22 @@ files) never changed; the state dirs and B2 backups were never touched:
   self-healing. Half-written npm tree after an OOM-killed install (npm
   writes package.json before unpacking): rm -rf
   /srv/appdata/joplin-cli/npm and the next run reinstalls.
+- joplin-export backup-storm deadline overrun (2026-10-27, H2): the
+  07:20 UTC (00:20 PDT) slot failed DeadlineExceeded mid-sync - the
+  nightly rclone backup (00:00-01:00 PDT) had all four array disks at
+  ~0.9 io-time; joplin startup went 0.8s -> 55s (node_modules + sqlite
+  on the array, Nextcloud WebDAV reads the same array) and the sync could
+  not finish inside the 300s activeDeadlineSeconds. The next slot
+  self-healed. Deadline is now 600s (Forbid makes an overrunning slot
+  just SKIP the next one - a slow-but-completing run is not a failure);
+  observed durations: p50 10s, backup/storm windows 64-120s. Diagnosis
+  gold that survives the 24h job ttl: Prometheus
+  `kube_job_status_failed{reason="DeadlineExceeded"}` +
+  `job_name=~"joplin-export-.*"` history, and the persistent CLI log
+  `/srv/appdata/joplin-cli/profile/log.txt` (its timestamps are UTC).
+  Also: single failed joplin ticks no longer page (KubeJobFailed
+  null-route in kube-prometheus-stack values.yaml, 2026-10-28) -
+  JoplinExportFailingStreak (>=2 in the ttl window) is the real signal.
 - k3s netpol + Traefik paths (AI phase, 2026-10-18 - THE big one): an
   egress allow for traffic dialed to `*.home.jg-a.com` must include
   Traefik's CONTAINER ports - the k3s traefik chart maps svc 443 ->

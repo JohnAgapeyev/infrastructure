@@ -168,4 +168,4 @@ spec:
             severity: warning
           annotations:
             summary: "joplin-export has multiple failed runs in 24h"
-            description: "At least two joplin-export Job objects failed within the ttl window ({{ $value }} failed jobs) - the */5 schedule is not self-healing. Check `kubectl -n ai get jobs | grep joplin-export`, the latest pod's logs and the run.sh lessons in docs/operations.md (WebDAV creds, netpol, npm 404)."
+            description: "At least two joplin-export Job objects failed within the ttl window ({{ $value }} failed jobs) - the */5 schedule is not self-healing. Check `kubectl -n ai get jobs | grep joplin-export`, the latest pod's logs and the run.sh lessons in docs/operations.md (WebDAV creds, netpol, npm 404, backup-storm deadline overrun)."

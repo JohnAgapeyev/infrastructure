@@ -16,9 +16,10 @@
 # added between OC and H2 were never in OpenViking; the first upsert run
 # after this restore backfills them (upsert semantics: changed files
 # re-embed, missing content drops out). VERIFY the first run fits the
-# 300s deadline - the original AI phase bootstrapped the FIRST sync via a
-# one-off pod because the initial vault download overran it (same trick
-# applies if the first backfill upsert overruns).
+# 600s deadline (raised from 300s 2026-10-27: backup/torrent IO storms
+# make even steady-state runs 2+ min) - the original AI phase bootstrapped
+# the FIRST sync via a one-off pod because the initial vault download
+# overran it (same trick applies if the first backfill upsert overruns).
 #
 # Pinned versions live below; bump deliberately (operations.md "AI ops"),
 # Dependabot cannot see npm versions inside this script (same accepted
