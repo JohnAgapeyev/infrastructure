@@ -1,0 +1,47 @@
+# ONE-OFF DR restore pod (MX-3) - NOT in kustomization.yaml (the
+# joplin-export/openclaw bootstrap-pod precedent: applied ad hoc only).
+#
+# Restores the newest managed RocksDB backup from the mounted backup
+# repo into database_path. Upstream contract: restore REPLACES the
+# live RocksDB files, so (1) the Deployment must be scaled to 0 first
+# (one writer, one dir - openviking rule), (2) tar the current
+# /srv/appdata/tuwunel first so the operation is reversible, (3) the
+# pod EXITS when done (restartPolicy: Never; --maintenance = never
+# serves clients, --execute "server shutdown" = exit after restoring).
+# A specific backup instead of the newest: --restore-backup=<id>, ids
+# from "!admin server list-backups" in the admin room.
+#
+# Runbook (docs/disaster-recovery.md "Single-app recovery"):
+#   kubectl -n ai scale deploy/tuwunel --replicas=0
+#   sudo tar -C /srv/appdata -czf /srv/Backups/tuwunel-pre-restore.tgz tuwunel
+#   kubectl apply -f apps/ai/tuwunel/restore-pod.yaml
+#   kubectl -n ai logs -f pod/tuwunel-restore    # wait for exit 0
+#   kubectl -n ai delete pod tuwunel-restore
+#   kubectl -n ai scale deploy/tuwunel --replicas=1
+# Media is NOT part of the DB backup - it restores from the plain B2
+# copy of /srv/appdata/tuwunel-media (D8/D9).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tuwunel-restore
+  namespace: ai
+  labels: { app: tuwunel }
+spec:
+  restartPolicy: Never
+  containers:
+    - name: tuwunel-restore
+      image: jevolk/tuwunel:v1.9.4
+      args: ["--restore-backup", "--maintenance", "--execute", "server shutdown"]
+      env:
+        - { name: TUWUNEL_CONFIG, value: /etc/tuwunel/tuwunel.toml }
+      volumeMounts:
+        - { name: config, mountPath: /etc/tuwunel/tuwunel.toml, subPath: tuwunel.toml, readOnly: true }
+        - { name: data, mountPath: /var/lib/tuwunel }
+        - { name: backups, mountPath: /var/backups/tuwunel, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: tuwunel-config }
+        - name: data
+          hostPath: { path: /srv/appdata/tuwunel, type: Directory }
+        - name: backups
+          hostPath: { path: /srv/appdata/_snapshots/tuwunel, type: Directory }

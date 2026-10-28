@@ -1,0 +1,23 @@
+# Element Web ingress (MX-2): element.home.jg-a.com -> element-web:80.
+# Auth happens at the HOMESERVER (Element Web is static files - it has
+# no accounts of its own), so no middleware here either; the wildcard
+# cert + Unbound wildcard cover the hostname (tls.md checklist).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: element-web
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - element.home.jg-a.com
+  rules:
+    - host: element.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: element-web
+                port: { number: 80 }

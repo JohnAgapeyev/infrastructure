@@ -1,0 +1,77 @@
+# tuwunel.toml (MX-1). Static config for the homeserver, mounted via
+# ConfigMap + TUWUNEL_CONFIG (deployment.yaml). The SECRET values are
+# NOT here: TUWUNEL_ALLOW_REGISTRATION + TUWUNEL_REGISTRATION_TOKEN ride
+# envs from the tuwunel-env Secret (secrets/matrix.env) - upstream env
+# vars override config-file values on the fly, and git must not carry
+# secrets. Verify new keys against tuwunel-example.toml for the pinned
+# tag (unknown keys only warn: error_on_unknown_config_opts defaults
+# false).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tuwunel-config
+  namespace: ai
+data:
+  tuwunel.toml: |
+    # MX phase (docs/PLAN.md D1-D13). Tuwunel = Rust Matrix homeserver
+    # (conduwuit lineage), embedded RocksDB, native sliding sync.
+
+    [global]
+    # PERMANENT: upstream documents server_name as requiring a DB wipe
+    # to change - pick assuming it is forever. LAN-only by design (D3),
+    # user IDs read @user:matrix.home.jg-a.com.
+    server_name = "matrix.home.jg-a.com"
+
+    # Non-loopback bind REQUIRED for kubelet pod-IP probes + Traefik
+    # (upstream default is loopback - the letta --listen lesson,
+    # recurring).
+    address = "0.0.0.0"
+    port = 8008
+
+    # RocksDB. The live tree is EXCLUDED from the B2 sync (torn mid-write
+    # copies are useless - the librechat-mongo class); the DB restore
+    # source is the MANAGED backup repo tuwunel writes to
+    # database_backup_path below (nightly trigger: scripts/
+    # snapshot-tuwunel.sh -> "!admin server backup-database").
+    database_path = "/var/lib/tuwunel"
+    database_backup_path = "/var/backups/tuwunel"
+    database_backups_to_keep = 7
+
+    # D13: RocksDB block caches scale with core count by default (read
+    # cache 128 + 64*cores MiB = 640 MiB on this 8-core node) - wasteful
+    # for a personal server on a node shared with the whole ai stack.
+    # 0.25 trims the scaled caches to ~160 MiB.
+    cache_capacity_modifier = 0.25
+
+    # D3: LAN/VPN-only, federation OFF. Public federation would need
+    # public DNS + an 8448 port-forward on OPNsense + netpol egress
+    # edits + a permanent public server_name decision - out of scope,
+    # and the ai-egress-internet-https list deliberately does NOT
+    # include tuwunel (it dials nothing).
+    allow_federation = false
+
+    # Traefik is the single trusted hop and appends the real client IP
+    # to X-Forwarded-For; rightmost XFF is spoof-resistant (upstream's
+    # guidance for nginx/caddy-class proxies - Traefik is the same
+    # one-hop shape). Rate limiting/logging attribute honestly.
+    ip_source = "rightmost_x_forwarded_for"
+
+    # Family server: no emoji suffix on new users' display names.
+    new_user_displayname_suffix = ""
+
+    # Client auto-discovery: Element X / Element Web resolving
+    # matrix.home.jg-a.com get the base URL from /.well-known/matrix/
+    # client, which tuwunel serves itself on this origin. Without
+    # this the file 404s and every client needs an explicit URL.
+    [global.well_known]
+    client = "https://matrix.home.jg-a.com"
+
+    # D8: media on a SEPARATE hostPath. The default media location is
+    # inside database_path, which the B2 sync excludes wholesale;
+    # overriding the implicit "media" provider to its own directory
+    # lets the media tree sync PLAINLY (it is the file restore source,
+    # librechat images/uploads class). create_if_missing stays false
+    # (upstream default): a missing mount must fail loud, not
+    # silently succeed (hostPath type: Directory enforces it too).
+    [global.storage_provider.media.local]
+    base_path = "/var/lib/tuwunel-media"

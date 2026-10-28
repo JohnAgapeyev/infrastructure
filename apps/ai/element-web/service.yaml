@@ -1,0 +1,12 @@
+# Element Web Service (MX-2). Port 80 = ELEMENT_WEB_PORT the pod sets
+# explicitly (the base image EXPOSEs 8080 as a stale leftover).
+apiVersion: v1
+kind: Service
+metadata:
+  name: element-web
+  namespace: ai
+  labels: { app: element-web }
+spec:
+  selector: { app: element-web }
+  ports:
+    - { name: http, port: 80, targetPort: 80 }

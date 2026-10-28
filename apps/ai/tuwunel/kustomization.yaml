@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - configmap.yaml
+  # restore-pod.yaml is deliberately NOT here: it is a one-off DR
+  # manifest applied ad hoc (bootstrap-pod precedent), never rolled out
+  # with the app.
+generatorOptions:
+  disableNameSuffixHash: true
+secretGenerator:
+  # Registration policy (D11): TUWUNEL_ALLOW_REGISTRATION=true only for
+  # the first-boot onboarding (register @john = admin via
+  # grant_admin_to_first_user, then the @hermes bot), then flip to
+  # false. TUWUNEL_* envs OVERRIDE the ConfigMap toml. The bot's
+  # MATRIX_* keys are NOT here - they live in Hermes's own
+  # /srv/appdata/hermes/.env (H2/C1: that store wins over k8s env).
+  # See secrets/matrix.env.example for the generation commands.
+  - name: tuwunel-env
+    namespace: ai
+    env: ../../../secrets/matrix.env
+    type: Opaque

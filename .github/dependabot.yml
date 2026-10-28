@@ -11,8 +11,10 @@ updates:
       # NC stack (apps/cloud): all bumps in one PR
       cloud: { patterns: ["nextcloud", "postgres", "redis"] }
       # AI stack (apps/ai): all bumps in one PR. openclaw/letta stay listed
-      # while disabled (revert path - see docs/PLAN.md H2 phase).
-      ai: { patterns: ["ghcr.io/volcengine/openviking", "nousresearch/hermes-agent", "ghcr.io/openclaw/openclaw", "ghcr.io/letta-ai/letta-code", "ghcr.io/librechat-ai/librechat", "mongo"] }
+      # while disabled (revert path - see docs/PLAN.md H2 phase). MX phase:
+      # jevolk/tuwunel = first-party Docker Hub registry (GHCR only serves
+      # :latest/:preview/:main - unpinnable, see apps/ai/tuwunel/deployment).
+      ai: { patterns: ["ghcr.io/volcengine/openviking", "nousresearch/hermes-agent", "ghcr.io/openclaw/openclaw", "ghcr.io/letta-ai/letta-code", "ghcr.io/librechat-ai/librechat", "mongo", "jevolk/tuwunel", "vectorim/element-web"] }
     ignore:
       - dependency-name: "jellyfin/jellyfin"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]

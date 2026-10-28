@@ -224,6 +224,8 @@ HA/matter together).
 | Nextcloud | https://nextcloud.home.jg-a.com | |
 | Hermes (AI) | https://hermes.home.jg-a.com (dashboard, basic auth) | |
 | Hermes API (AI, H2: Conduit) | https://hermes-api.home.jg-a.com (OpenAI-compatible API server; API_SERVER_KEY bearer) | |
+| Matrix (MX phase) | https://matrix.home.jg-a.com (tuwunel homeserver; federation OFF, registration closed after onboarding) | |
+| Element (MX phase) | https://element.home.jg-a.com (Element Web client for the homeserver) | |
 | OpenViking (AI) | https://openviking.home.jg-a.com (Web Studio at `/studio`) | |
 | OpenClaw (AI, H2 phase: disabled) | ~~https://openclaw.home.jg-a.com~~ (Control UI; gateway-token auth) | |
 | Letta (AI, H2 phase: disabled) | ~~https://letta.home.jg-a.com~~ (App Server; LETTA_APP_SERVER_TOKEN auth) | |
@@ -495,6 +497,160 @@ The disable-not-delete pattern, fourth generation:
    `secrets/librechat.env`, the snapshot script + drop-in lines and the
    Dependabot pattern all STAY.
 2. `make apply-ai`; re-add `librechat` to the kustomizations to restore.
+
+### MX phase (Matrix homeserver + Hermes bot) - 2026-10-28
+
+Design + decisions: docs/PLAN.md MX phase (D1-D13). Namespace `ai`
+(`apps/ai/tuwunel/` + `apps/ai/element-web/`): **tuwunel**
+(`jevolk/tuwunel:v1.9.4` - the maintainer's FIRST-PARTY Docker Hub
+registry; GHCR only publishes :latest/:preview/:main, which the pin
+policy rejects) - Rust Matrix homeserver (conduwuit lineage), embedded
+RocksDB (no DB sidecar), native sliding sync (Element X works);
+federation OFF (D3 - LAN/VPN-only; the homeserver dials NOTHING and is
+deliberately absent from ai-egress-internet-https), token-gated
+registration then closed (D11), first registered user = admin
+(grant_admin_to_first_user); ingresses matrix.home.jg-a.com (Service
+named `matrix` - the in-cluster name everything dials) +
+element.home.jg-a.com (static Element Web client, stateless, DNS-only
+egress); server_name `matrix.home.jg-a.com` is PERMANENT (DB wipe to
+change). **Hermes integration (D1)**: the gateway's NATIVE Matrix
+adapter (hermes-matrix toolset - full agent tools incl. terminal,
+approvals via ✅/❌/♾️ reactions, threads, voice notes) connects as
+the bot `@hermes:matrix.home.jg-a.com` over the IN-CLUSTER Service
+`http://matrix:8008` (D6 - zero netpol edits, the librechat->hermes
+precedent); the MATRIX_* keys live in Hermes's OWN
+/srv/appdata/hermes/.env (H2/C1: that store WINS over k8s env), with
+MATRIX_ALLOWED_USERS=@john:... so the bot ignores everyone else.
+Backups (D9): live RocksDB excluded; the DB restore source is the
+MANAGED backup repo `_snapshots/tuwunel/` (RocksDB BackupEngine,
+retention 7, TRIGGERED nightly by scripts/snapshot-tuwunel.sh sending
+"!admin server backup-database" to the admin room over the C-S API);
+media (`tuwunel-media/`) syncs plainly. Updates: tuwunel bumps run
+RocksDB migrations at startup - the Deployment's
+terminationGracePeriodSeconds: 1800 is upstream's --stop-timeout
+guidance so a migration is never killed mid-way; merge a bump only
+with a fresh managed backup first (Jellyfin-class caution). E2EE: the
+bot runs UNencrypted (D7 - LAN-only, and the in-cluster hop is plain
+HTTP anyway); encrypted rooms are allowed but OFF by default -
+enabling E2EE for the bot later means VERIFYing mautrix+libolm in the
+hermes image first (upstream: deleting crypto.db bricks the device
+identity - not worth it on a LAN server).
+
+#### Go-live order (MX phase - the owner steps)
+
+1. `sudo bash bootstrap/host/phase-mx0.sh` - creates
+   /srv/appdata/tuwunel (RocksDB) + /srv/appdata/tuwunel-media +
+   /srv/appdata/_snapshots/tuwunel, all 0:0 750 (the image runs as
+   root - verified from the image config; if a bump ever switches to a
+   non-root user the pod crash-loops on the RocksDB open and the dirs
+   need re-chowning).
+2. Fill `secrets/matrix.env` (generation commands in
+   secrets/matrix.env.example): `TUWUNEL_REGISTRATION_TOKEN=$(openssl
+   rand -hex 32)` + `TUWUNEL_ALLOW_REGISTRATION=true`.
+3. `sudo cp bootstrap/host/rclone-backup-dropin.conf
+   /etc/systemd/system/rclone-backup.service.d/override.conf` (new
+   exclude `tuwunel/**` + new ExecStartPre) **and** `sudo cp
+   scripts/snapshot-tuwunel.sh /srv/appdata/_scripts/` + `sudo chmod
+   +x /srv/appdata/_scripts/snapshot-tuwunel.sh` - neither host file
+   updates itself.
+4. `make apply-cluster` (netpol header comment only - NO allow changes)
+   + `make apply-ai` -> tuwunel + element-web 1/1 (probes hit
+   /_matrix/client/versions).
+5. Register at https://element.home.jg-a.com with the registration
+   token: **@john FIRST** (= admin via grant_admin_to_first_user),
+   then the bot **@hermes**. Then flip TUWUNEL_ALLOW_REGISTRATION to
+   `false` in secrets/matrix.env + `make apply-ai` (D11 - registration
+   closed; re-open briefly for family members later, or use the
+   admin-room user commands).
+6. Mint the bot token + write Hermes's config (the H2/C1 store):
+   ```
+   curl -s -X POST https://matrix.home.jg-a.com/_matrix/client/v3/login \
+     -H 'Content-Type: application/json' \
+     -d '{"type":"m.login.password","identifier":{"type":"m.id.user","user":"@hermes:matrix.home.jg-a.com"},"password":"<bot password>","initial_device_display_name":"hermes-gateway"}'
+   ```
+   -> copy `access_token` from the response, then:
+   ```
+   kubectl -n ai exec -i deploy/hermes -- sh -c 'cat >> /opt/data/.env' <<'EOF'
+   MATRIX_HOMESERVER=http://matrix:8008
+   MATRIX_USER_ID=@hermes:matrix.home.jg-a.com
+   MATRIX_ACCESS_TOKEN=<paste the token>
+   MATRIX_ALLOWED_USERS=@john:matrix.home.jg-a.com
+   EOF
+   kubectl -n ai rollout restart deploy/hermes
+   ```
+7. Backup-trigger env (root-only, 600): mint a long-lived @john token
+   (the same login curl with `"initial_device_display_name":
+   "backup-script"`), find the admin room's internal ID (Element ->
+   the admin room -> Settings -> Advanced), then:
+   ```
+   sudo tee /srv/appdata/_scripts/tuwunel-backup.env >/dev/null <<'EOF'
+   TUWUNEL_ADMIN_TOKEN=<the @john backup-script token>
+   TUWUNEL_ADMIN_ROOM_ID=!<internal room ID>:matrix.home.jg-a.com
+   EOF
+   sudo chmod 600 /srv/appdata/_scripts/tuwunel-backup.env
+   ```
+8. Set the home room (proactive/cron delivery target): DM @hermes
+   from Element, then send `/sethome` in that room (Matrix clients may
+   need the `!sethome` alias form).
+
+#### First live-run VERIFY items (MX phase)
+
+- C1 hermes v0.22.2 MATRIX_* env surface: the upstream docs describe
+  NEWER versions - after the restart, `kubectl -n ai logs deploy/hermes
+  --tail=200 | grep -i matrix` must show the adapter CONNECT + SYNC,
+  not "mautrix not installed" (the Docker build ships the matrix extra
+  on Linux - VERIFY, don't assume). Unknown-key fallback: interactive
+  `kubectl -n ai exec -it deploy/hermes -- hermes gateway setup`.
+- C2 image UID: `ls -l /srv/appdata/tuwunel` after first boot -
+  RocksDB files owned by root = expected.
+- C3 registration closed after step 5: a fresh registration attempt is
+  refused (M_FORBIDDEN) - the token path is gone.
+- C4 backup leg: `sudo systemctl start rclone-backup.service` ->
+  "snapshot ok: _snapshots/tuwunel updated"; `!admin server
+  list-backups` in the admin room shows the fresh backup; full DR
+  rehearsal leg per disaster-recovery.md (restore-pod.yaml).
+- C5 clock skew: `timedatectl` -> "System clock synchronized: yes" -
+  upstream gotcha: a host clock AHEAD of real time makes the bot drop
+  EVERY message ("dropped N live events as 'too old'").
+- C6 agent E2E from Element: DM @hermes -> streamed reply; a terminal/
+  dangerous tool call -> approval reactions (✅ once / ♾️ always /
+  ❌ deny); `!commands` (or /commands) works; ask something only a
+  Joplin note knows -> memory recall via OpenViking answers.
+- C7 media through Traefik: send a >10 MiB file to the bot over VPN -
+  if it 502s at exactly 60s, the NC readTimeout lesson applies.
+- C8 Element X (over WireGuard) + Element Web: login @john, sliding
+  sync works, a sync connection stays alive for minutes (client
+  long-polls are <= 30s).
+- C9 `kubectl top nodes` - headroom for the two new pods (~1.1 GiB of
+  limits total; trimmed RocksDB caches per D13).
+
+#### Troubleshooting (MX phase)
+
+- Bot silent despite greens: MATRIX_ALLOWED_USERS must use the FULL
+  @user:server form; check the C5 clock skew; check hermes logs for
+  "whoami failed" (token revoked/expired -> re-mint, re-write .env).
+- Backup unit fails at snapshot-tuwunel: 401 = the admin token died
+  (re-mint step 7); HTTP 503 = homeserver/ingress down; backup never
+  lands = check `!admin server list-backups` output in the admin room.
+- kubectl exec: the tuwunel image has NO shell - exec the binary
+  directly, e.g. `kubectl -n ai exec deploy/tuwunel -- tuwunel --help`.
+- Admin commands live in the ADMIN ROOM only (created at first boot;
+  check the @john invite in Element): `!admin server ...`, `!admin
+  users ...`, `!admin rooms ...`.
+
+#### Revert procedure (drop Matrix)
+
+The disable-not-delete pattern, fifth generation:
+
+1. `apps/ai/kustomization.yaml`: drop the `tuwunel` + `element-web`
+   entries (removing them from the kustomization deletes the
+   Deployments/Services/Ingresses); state dirs
+   `/srv/appdata/{tuwunel,tuwunel-media}`, `secrets/matrix.env`, the
+   snapshot script + drop-in lines and the Dependabot pattern all STAY.
+2. Hermes side: remove the MATRIX_* lines from /srv/appdata/hermes/.env
+   (kubectl exec + sed -i) + `kubectl -n ai rollout restart
+   deploy/hermes`.
+3. `make apply-ai`; re-add the entries to restore.
 
 ### LET phase (historical - Letta go-live + revert runbooks)
 

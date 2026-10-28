@@ -1,0 +1,19 @@
+# Tuwunel Service (MX-1). Named `matrix` on purpose: it is the
+# in-cluster DNS name everything dials - Hermes's MATRIX_HOMESERVER is
+# http://matrix:8008 (D6) and the name matches the public hostname
+# matrix.home.jg-a.com so the two never surprise anyone. Port 8008 =
+# upstream default (client API + media + well-known, one port; there
+# is no separate federation port - federation is OFF).
+apiVersion: v1
+kind: Service
+metadata:
+  # labelled: ServiceMonitors select SERVICES by their labels (jellyfin
+  # lesson) - none here (tuwunel exports no metrics), but the convention
+  # costs nothing
+  name: matrix
+  namespace: ai
+  labels: { app: tuwunel }
+spec:
+  selector: { app: tuwunel }
+  ports:
+    - { name: http, port: 8008, targetPort: 8008 }

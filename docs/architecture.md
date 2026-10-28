@@ -52,7 +52,13 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
   netpol allows: its egress is DNS + same-ns only (librechat ->
   hermes:8642 + -> librechat-mongo:27017 both ride the generic
   same-ns egress), deliberately excluded from the internet-443 allow -
-  all model traffic goes in-cluster to hermes.
+  all model traffic goes in-cluster to hermes. The MX phase (2026-10-28)
+  added tuwunel (Matrix homeserver, federation OFF) + element-web
+  (static client) with NO new allows either: hermes -> tuwunel:8008
+  rides the generic same-ns egress, both new pods are deliberately
+  absent from the internet-443 list (the homeserver dials nothing
+  with federation off; Element Web serves static files), so a
+  compromised homeserver reaches nothing outside the ns.
 
 ## Services
 
@@ -74,6 +80,8 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
 | openclaw | AI agent gateway + Control UI + builtin memory (OC phase; **H2 phase: disabled** - replicas 0, kept for revert) | `ghcr.io/openclaw/openclaw:2026.10.5` in `apps/ai/openclaw` |
 | letta | Letta App Server: stateful agents + Agent SDK remote backend (LET phase; **H2 phase: disabled** - replicas 0, kept for revert) | `ghcr.io/letta-ai/letta-code:0.34.19` in `apps/ai/letta` |
 | librechat | web front-end for the Hermes agent gateway, via its OpenAI-compatible API :8642 over the in-cluster Service (LC phase) + no-auth mongo behind the default-deny | `ghcr.io/librechat-ai/librechat:v0.8.8` + `mongo:8.0.20` in `apps/ai/librechat` |
+| tuwunel | Matrix homeserver for the Hermes gateway bot (`@hermes`) + family accounts; federation OFF, LAN/VPN-only (MX phase) | `jevolk/tuwunel:v1.9.4` in `apps/ai/tuwunel` |
+| element-web | Element Web static client for the homeserver (MX phase) | `vectorim/element-web:v1.12.33` in `apps/ai/element-web` |
 | joplin-export | official Joplin CLI sync client -> clean md export tree -> OpenViking upsert (CronJob, */5; ov leg restored in H2) | `node:24.22.0-bookworm-slim` + `joplin@3.7.1` + `@openviking/cli@0.4.23` in `apps/ai/joplin-export` |
 | kube-prometheus-stack | metrics/alerts/dashboards | umbrella chart in `apps/observability/` |
 | cert-manager | TLS issuance (LE wildcard via Cloudflare DNS-01) | `v1.21.2` pinned, `scripts/install-cert-manager.sh` |

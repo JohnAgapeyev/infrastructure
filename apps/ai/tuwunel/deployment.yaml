@@ -1,0 +1,92 @@
+# Tuwunel Matrix homeserver (MX-1). The homeserver that hosts the
+# owner + family accounts and the @hermes bot; Hermes's NATIVE Matrix
+# adapter (apps/ai/hermes, hermes-matrix toolset) connects to it as a
+# client over the in-cluster Service http://matrix:8008 (D1/D6 - same
+# shape as librechat -> hermes: zero netpol edits, no public-URL DNAT
+# saga).
+#
+# Image (D2): jevolk/tuwunel - the maintainer's FIRST-PARTY Docker Hub
+# registry (linked from the official docs), version-tagged. GHCR only
+# publishes :latest/:preview/:main there, which the pin policy rejects
+# (the LibreChat registry decision, recurring). Rust, conduwuit lineage,
+# embedded RocksDB - NO database sidecar (the reason tuwunel won the
+# homeserver choice). Native sliding sync -> Element X works.
+# Image facts (verified from the image config, 2026-10-28): Entrypoint
+# IS the binary (no shell - kubectl exec must run `tuwunel` args
+# directly), NO USER directive -> runs as root (letta precedent;
+# /srv/appdata/tuwunel stays 0:0), EXPOSE 8008/8448.
+#
+# One pod, one RocksDB dir - replicas: 1 + Recreate (the openviking
+# single-writer rule; the embedded vector backend lock, same class).
+# terminationGracePeriodSeconds 1800: upstream's --stop-timeout 1800
+# guidance - an image bump runs RocksDB migrations at startup, and a
+# kill mid-migration is the one unrecoverable way to lose the DB
+# (Jellyfin-class update caution, see operations.md "Matrix ops").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tuwunel
+  namespace: ai
+  labels: { app: tuwunel }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: tuwunel }
+  template:
+    metadata:
+      labels: { app: tuwunel }
+    spec:
+      terminationGracePeriodSeconds: 1800
+      containers:
+        - name: tuwunel
+          image: jevolk/tuwunel:v1.9.4
+          env:
+            # static config lives in the ConfigMap toml (see
+            # configmap.yaml); env vars override it where set
+            - { name: TUWUNEL_CONFIG, value: /etc/tuwunel/tuwunel.toml }
+          envFrom:
+            # TUWUNEL_ALLOW_REGISTRATION + TUWUNEL_REGISTRATION_TOKEN
+            # (secrets/matrix.env.example documents both; D11:
+            # token-gated first boot, then ALLOW_REGISTRATION=false)
+            - secretRef: { name: tuwunel-env }
+          ports:
+            - { name: http, containerPort: 8008 }
+          # /_matrix/client/versions: unauthenticated, spec-mandated,
+          # served only after RocksDB opens + the listener binds - an
+          # honest readiness contract (conduwuit-family has no /health;
+          # if this ever fails closed check the log, not the probe).
+          startupProbe:
+            httpGet: { path: /_matrix/client/versions, port: 8008 }
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /_matrix/client/versions, port: 8008 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /_matrix/client/versions, port: 8008 }
+            periodSeconds: 30
+          resources:
+            # tiny server: trimmed caches (see toml D13) + Rust runtime
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/tuwunel/tuwunel.toml, subPath: tuwunel.toml, readOnly: true }
+            # RocksDB (excluded from B2 live sync; restore source =
+            # the managed backup repo in _snapshots/tuwunel/)
+            - { name: data, mountPath: /var/lib/tuwunel }
+            # media on its own hostPath so the DB dir can be excluded
+            # wholesale (D8) - this tree syncs plainly
+            - { name: media, mountPath: /var/lib/tuwunel-media }
+            # managed backup repo -> /srv/appdata/_snapshots/tuwunel
+            # (synced; retention is tuwunel's own database_backups_to_keep)
+            - { name: backups, mountPath: /var/backups/tuwunel }
+      volumes:
+        - name: config
+          configMap: { name: tuwunel-config }
+        - name: data
+          hostPath: { path: /srv/appdata/tuwunel, type: Directory }
+        - name: media
+          hostPath: { path: /srv/appdata/tuwunel-media, type: Directory }
+        - name: backups
+          hostPath: { path: /srv/appdata/_snapshots/tuwunel, type: Directory }

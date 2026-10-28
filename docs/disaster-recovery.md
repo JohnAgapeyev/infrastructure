@@ -34,6 +34,15 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
   snapshotted into `_snapshots/openclaw/`; a corrupt/stale memory index
   rebuilds with `openclaw memory index --force`. Doctor's pre-migration
   `.bak` copies (kept in the state dir) must ride the pre-upgrade backup.
+- MX phase: `/srv/appdata/tuwunel-media` (Matrix media - voice notes,
+  images, files) syncs plainly and is the file restore source. The live
+  RocksDB tree `/srv/appdata/tuwunel` is excluded; the DB restore
+  source is the MANAGED backup repo `_snapshots/tuwunel/` (created by
+  tuwunel's own RocksDB BackupEngine + retention 7, triggered nightly
+  by snapshot-tuwunel.sh BEFORE the rclone run - mid-backup copies
+  never sync). Element Web is stateless (git-only). Hermes's MATRIX_*
+  keys live in `/srv/appdata/hermes/.env` (hermes restore entry
+  covers them).
 - Disposable: k3s runtime (`/var/lib/rancher/k3s`, SSD), Prometheus TSDB,
   Jellyfin cache. All recreated from git + appdata.
 - The Matter fabric (`/srv/appdata/matter-server`, Phase 9) is also kept
@@ -136,3 +145,21 @@ Re-run the rehearsal after any change to the backup pipeline.
   `apps/ai/openclaw/openclaw.json.example`.
 - OC phase, hermes/openviking (disabled): their restore entries above are
   the revert path - see operations.md "AI ops" revert procedure.
+- MX phase, tuwunel: if the DB broke (corruption/bad upgrade), restore
+  the newest managed backup - it is a one-off pod because the restore
+  REPLACES the live RocksDB files and must run with the server down:
+  ```
+  kubectl -n ai scale deploy/tuwunel --replicas=0
+  sudo tar -C /srv/appdata -czf /srv/Backups/tuwunel-pre-restore.tgz tuwunel
+  kubectl apply -f apps/ai/tuwunel/restore-pod.yaml   # --restore-backup
+  kubectl -n ai logs -f pod/tuwunel-restore           # wait for exit 0
+  kubectl -n ai delete pod tuwunel-restore
+  kubectl -n ai scale deploy/tuwunel --replicas=1
+  ```
+  A specific backup (ids from `!admin server list-backups` in the
+  admin room): edit `--restore-backup` to `--restore-backup=<id>` in
+  restore-pod.yaml first. Total loss: `rclone copy
+  Backblaze:John-System-Backups/appdata/tuwunel-media
+  /srv/appdata/tuwunel-media -P` + the backup repo to
+  `_snapshots/tuwunel/`, then the same restore pod + `make apply-ai`.
+  Media is NOT part of the DB backup - both legs are needed.

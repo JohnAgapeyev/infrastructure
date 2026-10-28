@@ -229,6 +229,60 @@ re-login. REMAINING VERIFY: streamed chat turn through Traefik (SSE -
 C3), tool/terminal turn, memory recall via OpenViking, the backup
 unit run + mongodump restore rehearsal, node RAM headroom.
 
+Progress (2026-10-28, MX phase - Matrix homeserver + Hermes bot):
+MX-0..MX-4 COMMITTED (cluster rollout PENDING owner go-live: ### SUDO
+bash bootstrap/host/phase-mx0.sh + fill secrets/matrix.env + re-copy
+the rclone drop-in AND scripts/snapshot-tuwunel.sh to
+/srv/appdata/_scripts/ + make apply-cluster (netpol comment no-op) /
+apply-ai + register @john (= admin) then the @hermes bot at
+element.home.jg-a.com then close registration + mint the bot token +
+append MATRIX_* to /srv/appdata/hermes/.env + restart hermes + fill
+/srv/appdata/_scripts/tuwunel-backup.env - full ordered runbook in
+operations.md "MX phase"). Components (ns ai): **tuwunel**
+(`jevolk/tuwunel:v1.9.4` - the maintainer's FIRST-PARTY Docker Hub
+registry, version-tagged; GHCR only serves :latest/:preview/:main and
+was REJECTED by the pin policy, the LibreChat registry decision
+recurring) - Rust Matrix homeserver, conduwuit lineage, embedded
+RocksDB (NO database sidecar - the deciding factor vs Synapse+PG),
+native sliding sync (Element X), image verified root-run with the
+binary as entrypoint (no shell - exec the binary directly) and
+**element-web** (`vectorim/element-web:v1.12.33`, static nginx, runs
+as USER nginx, listens ELEMENT_WEB_PORT=80, config at
+/app/config.json via ConfigMap). Integration (D1): Hermes's NATIVE
+Matrix adapter (hermes-matrix toolset, mautrix SDK - full agent tools
+incl. terminal, approval reactions, threads, voice) connects as the
+bot @hermes:matrix.home.jg-a.com over the IN-CLUSTER Service
+http://matrix:8008 (D6, the librechat->hermes precedent - ZERO netpol
+allow edits); MATRIX_* keys in hermes's own /srv/appdata/hermes/.env
+(H2/C1 winner store) + MATRIX_ALLOWED_USERS=@john (the only gate on a
+terminal-capable bot). Decisions: D3 LAN/VPN-only, allow_federation
+false, tuwunel NOT in ai-egress-internet-https (a compromised
+homeserver dials nothing); D5 server_name matrix.home.jg-a.com
+(PERMANENT - DB wipe to change, chosen for the LAN-only scope);
+D7 bot E2EE off (in-cluster hop is plain HTTP; crypto.db fragility
+not worth it on LAN); D8 media on a separate hostPath (toml
+storage_provider.media.local override) so the live RocksDB dir is
+B2-excluded wholesale while tuwunel-media/ syncs plainly; D9 DB
+restore source = the MANAGED RocksDB backup repo in
+_snapshots/tuwunel/ (database_backup_path + retention 7), triggered
+nightly by snapshot-tuwunel.sh (ExecStartPre #4) sending "!admin
+server backup-database" to the admin room over the C-S API (long-lived
+admin token in a root-only env file - the only way to invoke tuwunel's
+BackupEngine; live tree excluded, librechat-mongo class); D11
+registration token-gated first boot then closed (LC pattern), first
+user = admin; D13 cache_capacity_modifier 0.25 (RocksDB caches scale
+with the 8 cores by default = 640 MiB - trimmed to ~160 MiB);
+terminationGracePeriodSeconds 1800 (upstream --stop-timeout: never
+kill a startup RocksDB migration). DR: one-off restore-pod.yaml
+(--restore-backup --maintenance --execute "server shutdown"),
+disaster-recovery.md rehearsal leg. VERIFY at go-live: hermes v0.22.2
+MATRIX_* env surface (C1 - upstream docs describe newer versions;
+logs must show the adapter sync, not "mautrix not installed"), image
+UID, closed registration, backup trigger + restore leg, clock skew
+(drops ALL messages if the host is ahead), agent E2E with approval
+reactions + OpenViking recall, >10 MiB media through Traefik (60s
+readTimeout lesson), Element X sliding sync over VPN, node RAM.
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

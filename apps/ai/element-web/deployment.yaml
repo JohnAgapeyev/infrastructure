@@ -1,0 +1,56 @@
+# Element Web client (MX-2). Static nginx build of the official
+# Element web app - the zero-install client for the homeserver at
+# element.home.jg-a.com (D10). STATELESS: no hostPath, nothing to back
+# up; config.json rides the ConfigMap (configmap.yaml).
+#
+# Image facts (verified from the image config, 2026-10-28): runs as
+# USER nginx (unprivileged by upstream design), listens on
+# ELEMENT_WEB_PORT (default 80 - repeated explicitly below for the
+# next reader; the base image EXPOSEs 8080, a stale leftover that does
+# NOT match what it serves), config expected at /app/config.json.
+# First-party vectorim org Docker Hub, version-tagged (pin policy,
+# Dependabot-tracked).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: element-web
+  namespace: ai
+  labels: { app: element-web }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: element-web }
+  template:
+    metadata:
+      labels: { app: element-web }
+    spec:
+      containers:
+        - name: element-web
+          image: vectorim/element-web:v1.12.33
+          env:
+            # upstream default, repeated so the port story is local
+            - { name: ELEMENT_WEB_PORT, value: "80" }
+          ports:
+            - { name: http, containerPort: 80 }
+          # nginx serves / (redirects to the app index); the upstream
+          # HEALTHCHECK itself spiders /config.json - / is the same
+          # contract without depending on the config mount for liveness
+          startupProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          volumeMounts:
+            - { name: config, mountPath: /app/config.json, subPath: config.json, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: element-web-config }

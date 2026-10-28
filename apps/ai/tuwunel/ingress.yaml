@@ -1,0 +1,33 @@
+# Homeserver ingress (MX-1): matrix.home.jg-a.com -> matrix:8008.
+# Clients: Element Web (browser), Element X / Element Desktop (LAN +
+# WireGuard VPN - the Unbound wildcard + wildcard cert cover the
+# hostname, zero DNS/cert steps, tls.md new-service checklist), and
+# the host-side backup trigger script (scripts/snapshot-tuwunel.sh
+# dials the same URL). No middleware: auth is Matrix's own (bearer
+# tokens + login; registration is closed after onboarding, D11).
+#
+# Traefik notes baked from prior lessons: client /sync long-polls are
+# <= 30s (tuwunel clamps at 90s but Element asks 30) - inside the
+# NC-phase readTimeout shape (which only ever bit slow REQUEST bodies);
+# media uploads are capped at tuwunel's max_request_size (24 MiB
+# default) - if a large upload ever 502s at exactly 60s over VPN, the
+# NC readTimeout lesson applies (cluster/traefik/helmchartconfig.yaml).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: matrix
+  namespace: ai
+spec:
+  tls:
+    - hosts:
+        - matrix.home.jg-a.com
+  rules:
+    - host: matrix.home.jg-a.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: matrix
+                port: { number: 8008 }

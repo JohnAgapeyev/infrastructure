@@ -12,3 +12,9 @@ resources:
   # LC phase (2026-10-26): librechat web front-end for the hermes gateway
   # (incl. its no-auth mongo) - see docs/PLAN.md LC phase.
   - librechat
+  # MX phase (2026-10-28): tuwunel Matrix homeserver (federation OFF,
+  # hermes's native Matrix adapter connects as the @hermes bot over the
+  # in-cluster matrix:8008 Service) + element-web static client - see
+  # docs/PLAN.md MX phase.
+  - tuwunel
+  - element-web

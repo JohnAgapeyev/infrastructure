@@ -75,6 +75,18 @@ All app state lives on `/srv` (RAID).
 - `/srv/appdata/joplin-export` - the clean markdown export tree (one dir
   per notebook, title-named files). Fully regenerable (next job run
   rebuilds it); excluded from the B2 sync on purpose.
+- `/srv/appdata/tuwunel` - Tuwunel Matrix homeserver state (MX phase):
+  embedded RocksDB database. The LIVE tree is excluded from the B2 sync
+  (torn mid-write copies are useless); the DB restore source is
+  tuwunel's MANAGED backup repo in `_snapshots/tuwunel/` (RocksDB
+  BackupEngine, retention 7, triggered nightly by the backup unit -
+  see scripts/snapshot-tuwunel.sh).
+- `/srv/appdata/tuwunel-media` - Matrix media (uploads: voice notes,
+  images, files). On a SEPARATE dir on purpose (toml
+  `storage_provider.media.local` override): it syncs plainly and IS
+  the file restore source (librechat images/uploads class), while the
+  DB dir above can be excluded wholesale. Owned 0:0 (the image runs as
+  root).
 - `/srv/misc/torrents` is a host symlink -> `/srv/Media/Torrents` (the qbit
   pod additionally mounts the real dir at `/srv/misc/torrents` = compat
   mount A; the Samba `[temp]` share does NOT follow the symlink - expected).
@@ -108,6 +120,8 @@ All app state lives on `/srv` (RAID).
 | node (joplin-export) | 1000 | 1000 | in-image UID (node:bookworm-slim "node" user); joplin-cli + joplin-export dirs 1000:1000 - collides with host john (1000) by design, owner-inspectable |
 | node (openclaw) | 1000 | 1000 | in-image UID (ghcr.io/openclaw/openclaw "node" user); /srv/appdata/openclaw 1000:1000 (OC phase; **H2 phase: disabled**, kept for revert) |
 | root (letta) | 0 | 0 | in-image default (ghcr.io/letta-ai/letta-code sets no USER; verified uid=0 at LET go-live); /srv/appdata/letta 0:0 750 (LET phase; **H2 phase: disabled**, kept for revert) |
+| root (tuwunel) | 0 | 0 | in-image default (jevolk/tuwunel sets no USER - verified from the image config, MX phase); /srv/appdata/{tuwunel,tuwunel-media} 0:0 750 |
+| nginx (element-web) | 101 | 101 | in-image USER (vectorim/element-web runs unprivileged); no hostPath at all - stateless |
 
 Plan's original UIDs 980-982 were taken (systemd users); owner chose auto
 assignment at creation. `/srv/appdata/<app>` dirs are chowned `<user>:media`

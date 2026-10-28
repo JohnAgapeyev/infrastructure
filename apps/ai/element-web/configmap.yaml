@@ -1,0 +1,32 @@
+# Element Web config.json (MX-2). Mounted at /app/config.json (the
+# upstream image's documented config location). The BROWSER talks to
+# the homeserver directly (CORS-allowed by tuwunel's well-known
+# client URL); this pod only serves static files - egress DNS-only.
+# Keys: default_server_config pins the homeserver so login works with
+# zero typing; disable_custom_urls locks the login page to it (family
+# instance - flip to true if arbitrary servers should be dialable);
+# no identity server (no 3pid lookups on a LAN server),
+# disable_3pid_login + disable_guests close the unused surfaces;
+# default_federate false matches allow_federation = false.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: element-web-config
+  namespace: ai
+data:
+  config.json: |
+    {
+      "default_server_config": {
+        "m.homeserver": {
+          "base_url": "https://matrix.home.jg-a.com",
+          "server_name": "matrix.home.jg-a.com"
+        }
+      },
+      "brand": "Element",
+      "disable_custom_urls": true,
+      "disable_guests": true,
+      "disable_3pid_login": true,
+      "default_federate": false,
+      "show_labs_settings": true,
+      "default_theme": "dark"
+    }
