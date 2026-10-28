@@ -50,11 +50,22 @@ data:
     # include tuwunel (it dials nothing).
     allow_federation = false
 
-    # Traefik is the single trusted hop and appends the real client IP
-    # to X-Forwarded-For; rightmost XFF is spoof-resistant (upstream's
-    # guidance for nginx/caddy-class proxies - Traefik is the same
-    # one-hop shape). Rate limiting/logging attribute honestly.
-    ip_source = "rightmost_x_forwarded_for"
+    # ip_source: deliberately UNSET (the upstream default). GO-LIVE
+    # LESSON L4 (2026-10-28): with "rightmost_x_forwarded_for" the
+    # homeserver REFUSES every request that has no XFF header, and the
+    # hermes bot connects IN-CLUSTER (http://matrix:8008, D6) - direct
+    # pod traffic carries no XFF, so every bot sync died with
+    # "500: Can't extract client IP from configured ip_source".
+    # The default extractor scans proxy headers (leftmost) and falls
+    # back to the TCP peer: honest LAN clients keep real IPs through
+    # Traefik's appended XFF, direct in-cluster callers (the bot) get
+    # their pod IP. Tradeoff: a LAN client CAN spoof leftmost XFF -
+    # accepted for a LAN-only server (it only shifts rate-limit
+    # attribution/logs; qBittorrent already grants the whole LAN a
+    # WebUI bypass). Do NOT set rightmost_x_forwarded_for here while
+    # MATRIX_HOMESERVER bypasses Traefik. NOTE: ip_source changes need
+    # a tuwunel restart, and ConfigMap updates do NOT restart the pod
+    # - rollout restart manually after editing this file.
 
     # Family server: no emoji suffix on new users' display names.
     new_user_displayname_suffix = ""

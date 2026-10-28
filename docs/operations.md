@@ -598,7 +598,7 @@ identity - not worth it on a LAN server).
    from Element, then send `/sethome` in that room (Matrix clients may
    need the `!sethome` alias form).
 
-#### GO-LIVE LESSONS (MX phase, 2026-10-28 - go-live in progress)
+#### GO-LIVE LESSONS (MX phase, 2026-10-28)
 
 - **L1 - a UIAA registration probe with only a valid token CREATES A
   REAL ACCOUNT.** tuwunel (conduwuit-family behavior) COMPLETES the
@@ -607,31 +607,52 @@ identity - not worth it on a LAN server).
   200 + access_token. The 2026-10-28 token-validation probe thus
   created `@cpi5krogyo:matrix.home.jg-a.com`, which took
   `grant_admin_to_first_user` + the admin-room invite that were meant
-  for @john. RULE: register the owner account FIRST; never probe the
-  registration flow before it exists. Recovery sequence (the probe's
-  access token is the admin credential until transferred):
-  1. register @john + @hermes normally (the token is static/multi-use);
-  2. transfer admin using the probe token over the C-S API (the
-     snapshot-tuwunel.sh mechanism): send
-     `!admin users grant-admin @john:matrix.home.jg-a.com` to the
-     admin room `!bMtl3DY0t69JVMlmAz:matrix.home.jg-a.com` - grant-admin
-     auto-invites @john to the admin room;
-  3. as @john (admin room): `!admin users deactivate
-     @cpi5krogyo:matrix.home.jg-a.com` (VERIFY the exact flag surface
-     with `!admin -h` on the pinned version; deactivating the LAST
-     admin is refused by design, so @john must be admin first).
+  for @john (guest-flagged accounts do NOT show up in
+  `!admin users list-users`). RULE: register the owner account FIRST;
+  never probe the registration flow before it exists. RECOVERY (executed
+  2026-10-28, works): with the probe account's access token (it IS the
+  admin credential until transferred) send admin-room commands over the
+  C-S API: `!admin users make-user-admin
+  @john:matrix.home.jg-a.com` (NOT grant-admin - that subcommand does
+  not exist on v1.9.4; check `!admin users -h`) -> @john gains admin
+  AND auto-joins the admin room; then `!admin users deactivate
+  @cpi5krogyo:matrix.home.jg-a.com` (once a second admin exists the
+  last-admin guard no longer blocks it; deactivation kills the probe's
+  own token mid-command - expected).
 - **L2 - the admin-room-over-C-S-API round trip is VALIDATED LIVE**:
   `!admin server list-backups` sent via
   `PUT /_matrix/client/v3/rooms/<room>/send/m.room.message/<tx>`
   answered `No backups found.` in-room - the exact mechanism
   scripts/snapshot-tuwunel.sh depends on (C4's mechanism leg).
-- L3 - Element Web "can't connect" on the first owner attempt while
-  everything server-side verified green from the host (DNS + TLS +
-  Traefik + CORS preflight + UIAA token validation all OK) - pending
-  the owner's retry/answer; the pods take ~1 min from apply to Ready
-  and an attempt during that window meets a Traefik 503, which the
-  Element service worker then caches (hard-refresh /
-  clear-site-data is the remedy if so).
+- L3 - Element Web "can't connect" on the first owner attempt resolved
+  on retry; no server-side fault was ever found (DNS + TLS + Traefik +
+  CORS preflight + UIAA token validation all verified green from the
+  host). The pods take ~1 min from apply to Ready and an attempt in
+  that window meets a Traefik 503, which the Element service worker
+  then caches - hard-refresh is the first remedy for "can't connect"
+  reports during any go-live.
+- **L4 - `ip_source = "rightmost_x_forwarded_for"` 500s EVERY direct
+  in-cluster request.** Header-based ip_source values resolve the
+  client IP EXCLUSIVELY from the header; the hermes bot connects
+  in-cluster (D6, http://matrix:8008 - no Traefik, no XFF), so every
+  bot sync failed with `500: Can't extract client IP from configured
+  ip_source` until the key was REMOVED from the toml (the default
+  extractor scans proxy headers and falls back to the TCP peer:
+  browser traffic keeps real client IPs via Traefik's appended XFF,
+  the bot attributes to its pod IP - confirmed via
+  `!admin users last-active`). Tradeoff: leftmost XFF is spoofable by
+  a LAN client - accepted for a LAN-only server (it only shifts
+  rate-limit attribution/logs; qBittorrent already grants the whole
+  LAN a WebUI bypass). NEVER set a header-based ip_source while
+  MATRIX_HOMESERVER bypasses Traefik. NOTE: ip_source changes need a
+  tuwunel restart, and ConfigMap edits do NOT restart the pod - rollout
+  restart manually after touching the toml.
+- **C1 VERIFIED: hermes v0.22.2 ships the matrix adapter (mautrix
+  included)** and connects with exactly the four env keys of go-live
+  step 6 (MATRIX_HOMESERVER/USER_ID/ACCESS_TOKEN/ALLOWED_USERS - no
+  newer-doc keys needed, E2EE off). The sync loop retries every 5s on
+  errors and self-heals through homeserver restarts (observed twice,
+  both tuwunel restarts of this go-live).
 
 #### First live-run VERIFY items (MX phase)
 

@@ -282,6 +282,25 @@ UID, closed registration, backup trigger + restore leg, clock skew
 (drops ALL messages if the host is ahead), agent E2E with approval
 reactions + OpenViking recall, >10 MiB media through Traefik (60s
 readTimeout lesson), Element X sliding sync over VPN, node RAM.
+GO-LIVE 2026-10-28 (server side COMPLETE): tuwunel + element-web 1/1,
+@john registered (admin via recovery, see L1) + @hermes bot created
+(UIAA, inhibit_login) + token minted (device hermes-gateway) +
+MATRIX_* written to /srv/appdata/hermes/.env + gateway restarted ->
+bot syncing in-cluster (C1 PASSED: adapter + mautrix present, 5s
+retry loop self-healed through both tuwunel restarts). C3 PASSED
+(registration M_FORBIDDEN after the flip), C5 PASSED (clock
+synchronized), C2 PASSED (root-owned state dirs, root-run image).
+GO-LIVE LESSONS (full detail in operations.md "MX phase"): L1 UIAA
+token-only probes COMPLETE registration (stray guest admin -> recovery
+via make-user-admin + deactivate; grant-admin does not exist on
+v1.9.4), L2 admin-room-over-C-S-API validated live, L3 Element
+"can't connect" during the rollout window = service-worker-cached 503
+(retry/hard-refresh remedy), L4 ip_source rightmost_x_forwarded_for
+500s ALL direct in-cluster (no-XFF) requests - key REMOVED from the
+toml; default extractor + LAN tradeoff documented. REMAINING VERIFY:
+C4 backup leg (needs the owner's backup-script token env file), C6
+agent E2E from Element (DM + approval reactions + /sethome), C7 media
+through Traefik, C8 Element X sliding sync, C9 node RAM.
 
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
