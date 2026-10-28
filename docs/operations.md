@@ -535,6 +535,21 @@ HTTP anyway); encrypted rooms are allowed but OFF by default -
 enabling E2EE for the bot later means VERIFYing mautrix+libolm in the
 hermes image first (upstream: deleting crypto.db bricks the device
 identity - not worth it on a LAN server).
+**DM threading (2026-10-28, owner request)**: `MATRIX_DM_AUTO_THREAD=true`
+in /srv/appdata/hermes/.env - every TOP-LEVEL DM message becomes a
+synthetic thread root and each thread is its own session namespace
+(verified in the v0.22.2 adapter source: DMs ignore session_scope and
+follow MATRIX_DM_AUTO_THREAD/MATRIX_DM_MENTION_THREADS; rooms already
+auto-thread by default via MATRIX_AUTO_THREAD=true). Usage model: NEW
+topic = new top-level DM message (fresh isolated context); CONTINUE a
+topic = reply INSIDE its thread (context accumulates there only).
+Isolated = the conversational transcript; hermes's long-term memory
+(OpenViking + curated memory) is shared across ALL threads by design
+- "where are my screws" works from any thread. Alternative
+(one-line .env swap if ever wanted): MATRIX_DM_MENTION_THREADS=true
+instead - threads only on @hermes mentions, plain DM messages share
+one session. Manual reply-in-thread isolation works with no config at
+all. Existing messages are not retro-threaded - only new ones.
 
 #### Go-live order (MX phase - the owner steps)
 
