@@ -29,7 +29,18 @@ URL=https://matrix.home.jg-a.com
 DEST=/srv/appdata/_snapshots/tuwunel
 
 if [ ! -r "$ENV_FILE" ]; then
-  echo "snapshot-tuwunel: $ENV_FILE missing (MX go-live step 6) - aborting" >&2
+  # Rollout window: the drop-in is copied early in the go-live sequence
+  # (it also carries the live-RocksDB exclude), but the env file can
+  # only be created after the homeserver + admin account exist (step 6).
+  # Before the DB has EVER been created there is nothing to back up (no
+  # RocksDB CURRENT file) - skip loudly so the rest of the backup unit
+  # proceeds. The moment a DB exists, a missing env file is a HARD
+  # failure (no silent backup hole).
+  if [ ! -e /srv/appdata/tuwunel/CURRENT ]; then
+    echo "snapshot-tuwunel: no DB yet (rollout window) + no $ENV_FILE - skipping (create it at the MX go-live backup-env step, operations.md 'MX phase'; once the DB exists this becomes a hard failure)"
+    exit 0
+  fi
+  echo "snapshot-tuwunel: $ENV_FILE missing but the DB exists - aborting" >&2
   exit 1
 fi
 # shellcheck disable=SC1090

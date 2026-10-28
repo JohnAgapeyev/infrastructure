@@ -552,7 +552,10 @@ identity - not worth it on a LAN server).
    exclude `tuwunel/**` + new ExecStartPre) **and** `sudo cp
    scripts/snapshot-tuwunel.sh /srv/appdata/_scripts/` + `sudo chmod
    +x /srv/appdata/_scripts/snapshot-tuwunel.sh` - neither host file
-   updates itself.
+   updates itself. Safe to copy this early: the pre-step skips loudly
+   while no RocksDB DB exists yet (rollout window - the env file only
+   appears at step 7) and hard-fails only once a DB is actually there
+   without it (no silent backup hole).
 4. `make apply-cluster` (netpol header comment only - NO allow changes)
    + `make apply-ai` -> tuwunel + element-web 1/1 (probes hit
    /_matrix/client/versions).
