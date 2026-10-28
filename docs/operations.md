@@ -564,7 +564,9 @@ identity - not worth it on a LAN server).
    then the bot **@hermes**. Then flip TUWUNEL_ALLOW_REGISTRATION to
    `false` in secrets/matrix.env + `make apply-ai` (D11 - registration
    closed; re-open briefly for family members later, or use the
-   admin-room user commands).
+   admin-room user commands). NOTE (L1 below): the 2026-10-28 go-live
+   hit an admin-transfer recovery instead - follow the GO-LIVE
+   LESSONS sequence if @john registers as a NON-admin.
 6. Mint the bot token + write Hermes's config (the H2/C1 store):
    ```
    curl -s -X POST https://matrix.home.jg-a.com/_matrix/client/v3/login \
@@ -595,6 +597,41 @@ identity - not worth it on a LAN server).
 8. Set the home room (proactive/cron delivery target): DM @hermes
    from Element, then send `/sethome` in that room (Matrix clients may
    need the `!sethome` alias form).
+
+#### GO-LIVE LESSONS (MX phase, 2026-10-28 - go-live in progress)
+
+- **L1 - a UIAA registration probe with only a valid token CREATES A
+  REAL ACCOUNT.** tuwunel (conduwuit-family behavior) COMPLETES the
+  request: no username/password supplied -> it auto-generates a random
+  localpart + a passwordless, guest-flagged user and returns
+  200 + access_token. The 2026-10-28 token-validation probe thus
+  created `@cpi5krogyo:matrix.home.jg-a.com`, which took
+  `grant_admin_to_first_user` + the admin-room invite that were meant
+  for @john. RULE: register the owner account FIRST; never probe the
+  registration flow before it exists. Recovery sequence (the probe's
+  access token is the admin credential until transferred):
+  1. register @john + @hermes normally (the token is static/multi-use);
+  2. transfer admin using the probe token over the C-S API (the
+     snapshot-tuwunel.sh mechanism): send
+     `!admin users grant-admin @john:matrix.home.jg-a.com` to the
+     admin room `!bMtl3DY0t69JVMlmAz:matrix.home.jg-a.com` - grant-admin
+     auto-invites @john to the admin room;
+  3. as @john (admin room): `!admin users deactivate
+     @cpi5krogyo:matrix.home.jg-a.com` (VERIFY the exact flag surface
+     with `!admin -h` on the pinned version; deactivating the LAST
+     admin is refused by design, so @john must be admin first).
+- **L2 - the admin-room-over-C-S-API round trip is VALIDATED LIVE**:
+  `!admin server list-backups` sent via
+  `PUT /_matrix/client/v3/rooms/<room>/send/m.room.message/<tx>`
+  answered `No backups found.` in-room - the exact mechanism
+  scripts/snapshot-tuwunel.sh depends on (C4's mechanism leg).
+- L3 - Element Web "can't connect" on the first owner attempt while
+  everything server-side verified green from the host (DNS + TLS +
+  Traefik + CORS preflight + UIAA token validation all OK) - pending
+  the owner's retry/answer; the pods take ~1 min from apply to Ready
+  and an attempt during that window meets a Traefik 503, which the
+  Element service worker then caches (hard-refresh /
+  clear-site-data is the remedy if so).
 
 #### First live-run VERIFY items (MX phase)
 
