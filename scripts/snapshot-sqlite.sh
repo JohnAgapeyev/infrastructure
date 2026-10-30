@@ -48,6 +48,23 @@ for name in "${!DBS[@]}"; do
   fi
 done
 
+# Hermes named profiles (profiles phase): each profile keeps its own
+# state.db under /srv/appdata/hermes/profiles/<name>/ - snapshot every
+# one found (glob: profiles are created/removed on-box, never
+# enumerated here). Live copies stay out of the B2 sync via the
+# existing hermes *.db excludes; same WAL-on-ext4 reasoning as
+# hermes/state.db above.
+for db in $(find /srv/appdata/hermes/profiles -maxdepth 2 -name 'state.db' -type f 2>/dev/null); do
+  rel=${db#/srv/appdata/hermes/}
+  mkdir -p "$DEST/hermes/$(dirname "$rel")"
+  if sqlite3 "$db" ".timeout 15000" ".backup $DEST/hermes/$rel"; then
+    echo "snapshot ok: hermes/$rel"
+  else
+    echo "snapshot FAILED: hermes/$rel" >&2
+    rc=1
+  fi
+done
+
 # OpenViking (AI phase): its SQLite files sit at unpredictable paths in
 # the workspace (queuefs/usage-audit/...) - snapshot every *.db AND
 # *.sqlite3 found and let the rclone exclude keep the live ones out of

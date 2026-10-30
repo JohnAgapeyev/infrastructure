@@ -366,6 +366,49 @@ encrypted-room remakes for anything created meanwhile. Element
 room-version note: tuwunel advertises a spec default room version;
 nothing to configure.
 
+Progress (2026-10-30, profiles phase - Hermes multi-profile on the
+multiplexed gateway): EXECUTED + VERIFIED same day, all on-box, no
+manifest changes. The gateway already pinned `multiplex_profiles:
+true` now serves named profiles: each is a separate home
+(`/opt/data/profiles/<name>/` -> `/srv/appdata/hermes/profiles/`),
+created via `hermes profile create <name> --clone` (one-time copy of
+config/.env/SOUL.md/skills/plugins/curated memory; messaging channels
+and API_SERVER_KEY deliberately NOT cloned - one bot token belongs to
+one profile), configured via `hermes -p <name> config set` (never
+hand-edit config.yaml), personality via the profile's own SOUL.md.
+Isolation mechanics (generic, from the OpenViking v0.5.0 go-live
+findings): the memory provider derives identity from each profile's
+OWN .env key, so profile memory scoping = point the .env at the
+desired OpenViking user; account-shared `viking://resources/` trees
+stay visible to same-account users (resource ACLs gate management
+only until `ov admin set-account-settings --acl-enabled true
+<account>` is run - done for both accounts; with it on, restricted
+children enforce reads AND writes), and a separate ACCOUNT hides
+shared resources entirely (curated facts then travel by copies into
+the isolated user's own resources tree). `research` profile
+(go-live): anthropic/claude-opus-5.5 pinned (reasoning: the live knob
+is agent.reasoning_effort, NOT model.reasoning_effort - mis-set keys
+dangle silently; set it to high), recall_scope shared so follow-ups
+carry the daily context, kanban-routable description, Matrix bot
+@hermes-research (registration via out-of-band Secret patch - the repo
+pines false - + single-step UIAA register, token mint, per-profile
+MATRIX_* .env block incl. the MATRIX_E2EE_MODE=off pin, bot-created
+trusted_private_chat room + @john invite, gateway restart); access =
+`hermes -p research chat`, the Matrix handle, or /p/research/v1 (adds
+an API_SERVER_KEY to that profile's .env; currently unset = fails
+closed). snapshot-sqlite.sh now globs profiles/*/state.db (profiles
+are created/removed on-box - never enumerated in git). New repo skill
+fact-share (brain-save pattern) writes curated neutral facts to
+viking://resources/general-facts/ for read-only cross-namespace
+sharing; ops runbook section "Multi-profile ops" in operations.md.
+VERIFIED: gateway serves all profiles (hermes gateway list), research
+answers on Opus with the analyst voice + shared-memory recall, probe
+session archives land in the expected namespaces, joplin-export
+CronJob healthy under the enabled ACL enforcement, registration
+re-closed (M_FORBIDDEN). REMAINING VERIFY: owner accepts the new room
+invites in Element X; notification-preview hygiene is owner-side
+per-room config.
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

@@ -776,6 +776,75 @@ DMs + 2 test rooms were deleted via `!admin rooms delete <ROOM_ID>`;
   GET `/_matrix/client/v3/rooms/<id>/state/m.room.encryption` -> 404
   for every room.
 
+### Multi-profile ops (profiles phase) - 2026-10-30
+
+Hermes profiles are the isolation primitive: each named profile is a
+separate home directory (`/opt/data/profiles/<name>/` in the pod =
+`/srv/appdata/hermes/profiles/<name>/` on the host) with its own
+config.yaml, .env, SOUL.md, skills, memories, sessions and state.db.
+The ONE gateway pod multiplexes every profile (`gateway.multiplex_profiles:
+true`, already pinned): it rescans `profiles/` every ~30s and serves
+each profile's messaging platforms under that profile's own
+credentials. `hermes gateway list` shows the served set; park/unpark a
+profile with `hermes -p <name> gateway stop|start` (never install a
+per-profile gateway - the CLI refuses, exit 78).
+
+Workflow (no repo changes; all on-box via kubectl exec):
+
+1. `hermes profile create <name> --clone` - one-time copy of
+   config.yaml, .env (API keys, OpenViking connection), SOUL.md,
+   skills, plugins and curated memory files from the default profile.
+   Messaging channels (bot tokens, allowlists) and API_SERVER_KEY are
+   deliberately NOT cloned - a bot token may belong to only one
+   profile.
+2. Configure with `hermes -p <name> config set <key> <value>` (never
+   hand-edit config.yaml - agents included; a stray indent corrupts
+   the live gateway config). `hermes profile describe <name> --text
+   "..."` sets the description the kanban decomposer routes by.
+3. SOUL.md is a plain file in the profile home: edit directly, then
+   `hermes -p <name> gateway restart` to reconnect cleanly.
+4. Memory isolation: the OpenViking provider derives the user
+   identity from the profile's own `.env` key, so profiles sharing the
+   default's OPENVIKING_API_KEY share one memory namespace, and a
+   profile with its own user key writes/recalls only its own tree.
+   Two isolation levels: a separate user in the same account still
+   sees account-shared resources (`viking://resources/...`); a
+   separate account hides those as well. Resource ACLs (`ov acl`) can
+   grant read-only access per directory - but on OpenViking v0.5.0
+   they gate management only until the account setting is enabled:
+   `ov admin set-account-settings --acl-enabled true <account>` (do it
+   for any account using resource grants; user trees are
+   identity-scoped and unaffected).
+5. Adding a Matrix bot for a profile: register a user on Tuwunel
+   (patch the live `tuwunel-env` Secret out-of-band to flip
+   TUWUNEL_ALLOW_REGISTRATION, `kubectl rollout restart deploy/tuwunel`,
+   register, flip back, restart - no git trace, the repo pins false),
+   mint the access token, then append to that profile's `.env`:
+   MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_ACCESS_TOKEN,
+   MATRIX_ALLOWED_USERS, MATRIX_DM_AUTO_THREAD, MATRIX_E2EE_MODE=off
+   (same EE-off pin as the default bot - never set MATRIX_ENCRYPTION),
+   MATRIX_HOME_ROOM. `hermes -p <name> gateway restart`; the
+   multiplexer connects the bot under that profile.
+6. A served profile's API-server surface is the shared listener at
+   `/p/<name>/v1` (the default ingress host), authenticated by THAT
+   profile's API_SERVER_KEY; with no key in its .env the prefix fails
+   closed.
+
+Current profiles: `default` (daily driver, every Hermes room, GLM
+flash) and `research` (deep-research persona: anthropic/claude-opus-5.5
+pinned, agent.reasoning_effort high, recall_scope shared so follow-ups
+carry context, kanban-routable via its description, Matrix bot
+`@hermes-research`). Reach research with `hermes -p research chat`,
+its Matrix handle, or the dashboard.
+
+Repo-backed skills (brain-save, fact-share) deploy on-box:
+`kubectl cp apps/ai/hermes-skills/<skill>/ deploy/hermes:/opt/data/skills/`
+(or kubectl exec + heredoc), re-deploy after edits. fact-share writes
+curated neutral facts to `viking://resources/general-facts/` for
+read-only cross-namespace sharing (operator grants read ACLs);
+brain-save writes second-brain notes to the profile's own
+`viking://~/resources/brain/`.
+
 ### LET phase (historical - Letta go-live + revert runbooks)
 
 Design + decisions: `docs/PLAN.md` LET phase (2026-10-21). Namespace `ai`

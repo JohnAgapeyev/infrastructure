@@ -58,7 +58,11 @@ All app state lives on `/srv` (RAID).
   sessions, memories, skills, state.db: `/opt/data` in the pod, owned by
   the image runtime user UID 10000 (entrypoint chowns on first boot).
   H2 adds the API server (8642) - its key is k8s-injected
-  (secrets/hermes.env), NOT in this .env.
+  (secrets/hermes.env), NOT in this .env. Named profiles (profiles
+  phase) live under `profiles/<name>/` inside this tree - each with its
+  own config.yaml, .env, SOUL.md, skills, sessions and state.db,
+  served by the same multiplexed gateway pod (their state.db files are
+  snapshotted by the snapshot-sqlite glob).
 - `/srv/appdata/openviking` - OpenViking state (AI phase; **H2 phase:
   re-enabled**): `ov.conf` (root key +
   OpenRouter key - first-run wizard product, never in git),
