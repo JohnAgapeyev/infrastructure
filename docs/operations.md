@@ -740,6 +740,42 @@ The disable-not-delete pattern, fifth generation:
    deploy/hermes`.
 3. `make apply-ai`; re-add the entries to restore.
 
+#### EE-off (2026-10-29 follow-up): E2EE off by decision + room remake
+
+Design + decisions: docs/PLAN.md "EE-off phase". E2EE is OFF
+server-wide: tuwunel toml `allow_encryption = false` +
+`encryption_enabled_by_default_for_room_type = "none"`
+(apps/ai/tuwunel/configmap.yaml), hermes `/opt/data/.env`
+`MATRIX_E2EE_MODE=off`. Verified semantics: Element's default-encrypted
+DM/private-room creation comes out PLAIN (the server strips the
+m.room.encryption initial_state - no error toast); manual attempts
+(state event or encrypted event) 403. The 4 encrypted rooms that
+existed (Side Projects / General / Hermes / Home Lab) were remade
+unencrypted (same name/topic, bot re-invited); the old rooms + 2 stale
+DMs + 2 test rooms were deleted via `!admin rooms delete <ROOM_ID>`;
+`m.direct` cleaned. Maintenance:
+
+- NEVER add `MATRIX_ENCRYPTION` to hermes's .env or remove the
+  `MATRIX_E2EE_MODE=off` pin without re-taking the E2EE custody burden
+  (recovery-key escrow, key backup, bot crypto-store snapshots) - the
+  full reversal checklist is docs/PLAN.md "EE-off phase" REVERSAL PATH.
+- The tuwunel knobs are reloadable but ConfigMap updates do NOT restart
+  the pod: edit configmap.yaml -> `make apply-ai` -> `kubectl -n ai
+  rollout restart deploy/tuwunel` (the standing pattern).
+- Admin command tree (v1.9.4, live-verified): `!admin rooms ...` (NOT
+  conduwuit's singular `!admin room`), e.g. `!admin rooms list`,
+  `!admin rooms delete [-f] <ROOM_ID>`, `!admin server backup-database
+  | list-backups`, `!admin users deactivate`. Full tree: `!admin
+  --help`.
+- Element room-settings still shows an "Enable encryption" toggle; it
+  403s if flipped ("Encryption is disabled on this homeserver.") - the
+  acceptable residue of skipping the io.element.e2ee well-known
+  override. The Element recovery/security-key prompts are cosmetic
+  while no room is encrypted; nothing to back up or lose.
+- Status check: rooms without a shield icon in Element; or via API,
+  GET `/_matrix/client/v3/rooms/<id>/state/m.room.encryption` -> 404
+  for every room.
+
 ### LET phase (historical - Letta go-live + revert runbooks)
 
 Design + decisions: `docs/PLAN.md` LET phase (2026-10-21). Namespace `ai`

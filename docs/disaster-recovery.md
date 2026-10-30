@@ -42,7 +42,14 @@ consistent SQLite snapshots in `_snapshots/` (rehearsed with Prowlarr,
   by snapshot-tuwunel.sh BEFORE the rclone run - mid-backup copies
   never sync). Element Web is stateless (git-only). Hermes's MATRIX_*
   keys live in `/srv/appdata/hermes/.env` (hermes restore entry
-  covers them).
+  covers them). EE-off decision (2026-10-29): E2EE is OFF server-wide
+  (tuwunel `allow_encryption = false`) - room content is PLAINTEXT in
+  the DB and therefore in B2 by decision (PLAN.md "EE-off phase"), and
+  there are NO key-custody artifacts (no recovery keys, no key backup,
+  no client crypto store) to lose, escrow, or restore: a DB restore
+  yields readable history by construction. Do not enable E2EE without
+  the reversal checklist in PLAN.md (recovery-key escrow + bot
+  crypto-store snapshots).
 - Disposable: k3s runtime (`/var/lib/rancher/k3s`, SSD), Prometheus TSDB,
   Jellyfin cache. All recreated from git + appdata.
 - The Matter fabric (`/srv/appdata/matter-server`, Phase 9) is also kept

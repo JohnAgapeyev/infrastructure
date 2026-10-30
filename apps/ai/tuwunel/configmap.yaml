@@ -50,6 +50,30 @@ data:
     # include tuwunel (it dials nothing).
     allow_federation = false
 
+    # EE-off phase (2026-10-29): E2EE is OFF by decision. Element's
+    # own room-creation defaults (encrypted DMs whenever the peer has
+    # uploaded device keys + the encryption toggle default-ON for new
+    # private rooms) would have silently encrypted the family server
+    # on first use, and E2EE drags in the recovery-key/key-backup/
+    # crypto-store custody burden (PLAN.md "EE-off" entry).
+    # LIVE-TESTED semantics on v1.9.4: createRoom WITH m.room.encryption
+    # initial_state returns 200 with the state STRIPPED (Element's
+    # default-encrypted DMs/private rooms come out PLAIN, no error);
+    # a direct state PUT or an m.room.encrypted event 403s. The
+    # io.element.e2ee well-known override was therefore SKIPPED
+    # (operations.md "EE-off"); the only residue is Element's
+    # room-settings encryption toggle, which 403s if flipped.
+    # Both knobs are reloadable; reversal = flip both + re-take the
+    # custody burden (PLAN.md "EE-off" REVERSAL PATH).
+    allow_encryption = false
+
+    # Documentation-of-intent companion to allow_encryption (this IS
+    # the upstream default, pinned explicitly): "none" = the server
+    # never force-encrypts newly created rooms. The DANGEROUS values
+    # are "invite" (encrypt every private_chat/trusted_private_chat
+    # preset) and "all" - Synapse-equivalent knob.
+    encryption_enabled_by_default_for_room_type = "none"
+
     # ip_source: deliberately UNSET (the upstream default). GO-LIVE
     # LESSON L4 (2026-10-28): with "rightmost_x_forwarded_for" the
     # homeserver REFUSES every request that has no XFF header, and the

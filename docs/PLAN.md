@@ -302,6 +302,70 @@ C4 backup leg (needs the owner's backup-script token env file), C6
 agent E2E from Element (DM + approval reactions + /sethome), C7 media
 through Traefik, C8 Element X sliding sync, C9 node RAM.
 
+Progress (2026-10-29, EE-off phase - E2EE OFF by decision; encrypted
+rooms remade): EXECUTED + VERIFIED same day. Owner decision D-E1: the
+E2EE recovery-key/key-backup/crypto-store custody burden is not wanted
+on the family server, and Element's own room-creation defaults (DMs
+encrypted whenever the PEER has uploaded device keys - true for every
+Element login - + the encryption toggle default-ON for new private
+rooms) would have silently encrypted it on the first family DM.
+Changes: tuwunel toml gains `allow_encryption = false` +
+`encryption_enabled_by_default_for_room_type = "none"` (both
+reloadable, both verified present in the v1.9.4 example toml; the
+DANGEROUS values of the latter are "invite"/"all" - force-encrypt) and
+hermes /opt/data/.env gains `MATRIX_E2EE_MODE=off` (explicit pin;
+v0.22.2 honors it - its own log guidance names the env). LIVE-TESTED
+knob semantics (C-S API as @hermes): createRoom WITH m.room.encryption
+initial_state returns 200 and the room comes out PLAIN (state
+STRIPPED - Element's default-encrypted DM/private-room creation just
+works and yields unencrypted rooms, no error toast); direct PUT of
+m.room.encryption state -> 403 "Encryption is disabled on this
+homeserver."; sending an m.room.encrypted event -> 403 "Encryption has
+been disabled"; /keys/query + /keys/claim unaffected. CONSEQUENCE
+(D-E2): the io.element.e2ee force_disable well-known (element-web
+nginx + Traefik path route + CORS Middleware CRD - the nextcloud HSTS
+pattern) was designed but SKIPPED: the knob alone gives clean UX; the
+residue is that Element still SHOWS the room-settings encryption
+toggle, which 403s if anyone flips it. Rooms: inventory found 4
+encrypted rooms (Side Projects / General / Hermes / Home Lab, all
+@john+@hermes) + 2 stale go-live DMs the bot still sat in + 2 EE-2
+API test rooms; each encrypted room was REMADE unencrypted (same
+name/topic, bot re-invited - auto-join -, state verified absent), the
+old rooms + stale/test rooms were emptied (bot kicked/left) and
+deleted via `!admin rooms delete <ROOM_ID>` (8x "Successfully deleted
+the room from our database."; NOTE: v1.9.4 admin tree uses PLURAL
+`rooms` - conduwuit's `!admin room` is an unrecognized subcommand),
+m.direct was cleaned to the one active DM. Old room content
+consciously discarded per owner decision (worth-saving content lives
+in Hermes/OpenViking). D-E3: the Element security-key/cross-signing
+setup @john completed at first login stays as INERT account data - no
+undo exists or is needed; Element's recovery prompts are cosmetic
+while no room is encrypted. Backup/DR: NO pipeline changes by design -
+no key custody exists, restore remains the RocksDB + media legs, and
+disaster-recovery.md records the plaintext-by-decision posture.
+VERIFIED: knob tests above; remade rooms plain; purges; m.direct;
+C4 CLOSED (backup trigger leg live: 3 managed backups, incl. a manual
+root run); C6 PARTIAL (DM agent turn -> streamed "ok" reply through
+OpenRouter under the new posture); hermes logs clean post-restart (the
+one "dropping encrypted messages" warning predates the purge and
+refers to the since-deleted room). REMAINING VERIFY: owner Element
+session (4 new rooms present, old ones gone, DM + home + admin rooms
+intact, new rooms show NO shield), C6 remainder (approval reactions /
+!commands / Joplin recall), C7 media, C8 Element X sliding sync (also
+confirm Element X creates PLAIN rooms), C9 node RAM. REVERSAL PATH
+(kept cheap by design - per-room encryption is permanent but OFF is a
+config flip): flip both toml knobs + remove MATRIX_E2EE_MODE=off, then
+re-take the custody burden: per-account Element security key + key
+backup + recovery-key escrow OUTSIDE the nas+B2 chain, hermes
+MATRIX_E2EE_MODE=required + stable MATRIX_DEVICE_ID (match the token's
+device) + MATRIX_RECOVERY_KEY (the bot self-signs from secret storage
+each start; bootstrap it via MATRIX_RECOVERY_KEY_OUTPUT_FILE), and the
+bot crypto store at /opt/data/platforms/matrix/store/ MUST join
+snapshot-sqlite.sh + the rclone excludes (the torn-WAL class) - plus
+encrypted-room remakes for anything created meanwhile. Element
+room-version note: tuwunel advertises a spec default room version;
+nothing to configure.
+
 Origin: derived from the ChatGPT session "Homelab K3s Recommendations"
 (https://chatgpt.com/share/6aa6e591-bed8-83e8-860f-8538013f7f2e) plus a live
 inventory of the host taken on 2026-09-13, plus decisions made with the owner

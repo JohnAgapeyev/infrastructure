@@ -80,7 +80,7 @@ RAID6 ext4 `/srv`). Source of decisions: [PLAN.md](PLAN.md).
 | openclaw | AI agent gateway + Control UI + builtin memory (OC phase; **H2 phase: disabled** - replicas 0, kept for revert) | `ghcr.io/openclaw/openclaw:2026.10.5` in `apps/ai/openclaw` |
 | letta | Letta App Server: stateful agents + Agent SDK remote backend (LET phase; **H2 phase: disabled** - replicas 0, kept for revert) | `ghcr.io/letta-ai/letta-code:0.34.19` in `apps/ai/letta` |
 | librechat | web front-end for the Hermes agent gateway, via its OpenAI-compatible API :8642 over the in-cluster Service (LC phase) + no-auth mongo behind the default-deny | `ghcr.io/librechat-ai/librechat:v0.8.8` + `mongo:8.0.20` in `apps/ai/librechat` |
-| tuwunel | Matrix homeserver for the Hermes gateway bot (`@hermes`) + family accounts; federation OFF, LAN/VPN-only (MX phase) | `jevolk/tuwunel:v1.9.4` in `apps/ai/tuwunel` |
+| tuwunel | Matrix homeserver for the Hermes gateway bot (`@hermes`) + family accounts; federation OFF, LAN/VPN-only (MX phase); E2EE OFF by decision (EE-off phase, 2026-10-29) | `jevolk/tuwunel:v1.9.4` in `apps/ai/tuwunel` |
 | element-web | Element Web static client for the homeserver (MX phase) | `vectorim/element-web:v1.12.33` in `apps/ai/element-web` |
 | joplin-export | official Joplin CLI sync client -> clean md export tree -> OpenViking upsert (CronJob, */5; ov leg restored in H2) | `node:24.22.0-bookworm-slim` + `joplin@3.7.1` + `@openviking/cli@0.4.23` in `apps/ai/joplin-export` |
 | kube-prometheus-stack | metrics/alerts/dashboards | umbrella chart in `apps/observability/` |

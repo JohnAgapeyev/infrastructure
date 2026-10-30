@@ -6,6 +6,11 @@
 # B2 backups were never touched - the pod boots straight onto its old
 # config/sessions/memories, no wizard, no migration (image pin unchanged
 # since the AI phase: v0.22.2). **
+# ** EE-off phase (2026-10-29): the bot's Matrix E2EE stays OFF -
+# MATRIX_E2EE_MODE=off is pinned in Hermes's OWN /opt/data/.env (that
+# store WINS over k8s env, H2/C1). Never set MATRIX_ENCRYPTION or
+# remove the pin without the E2EE reversal checklist (docs/PLAN.md
+# "EE-off phase"). **
 # The image ENTRYPOINT is an s6-overlay dispatcher; `gateway run` passed as
 # args becomes the supervised main service, with the web dashboard
 # supervised alongside it (HERMES_DASHBOARD=1). s6 needs the container to
